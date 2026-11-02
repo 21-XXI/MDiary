@@ -57,7 +57,8 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Clean   # 清理后�
 |---|---|
 | 数据库 | `%APPDATA%\MDiary\mdiary.sqlite` |
 | 附件库 | `%APPDATA%\MDiary\attachments\<sha256前两位>\<sha256>.<ext>` |
-| 崩溃日志 | `%APPDATA%\MDiary\logs\` |
+| 错误日志 | `%APPDATA%\MDiary\logs\error.log`（发生异常时才创建，超过 1 MB 轮转为 `error.log.old`） |
+| 数据根目录覆盖 | 环境变量 `MDIARY_HOME`（便携模式） |
 
 备份 = 复制整个 `%APPDATA%\MDiary`，或使用「整库导出」得到纯 Markdown 副本。
 
