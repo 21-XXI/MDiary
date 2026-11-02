@@ -8,10 +8,10 @@
 
 | # | 项 | 命令 / 操作 | 期望 | 状态 |
 |---|---|---|---|---|
-| A1 | 静态分析 | `flutter analyze` | 0 error / 0 warning / 0 info | |
-| A2 | 单元测试 | `flutter test` | 全部通过 | |
-| A3 | Release 构建 | `flutter build windows --release` | 产出 `mdiary.exe` | |
-| A4 | 提交审查 | `git log` | 每条 commit 含改动/原因/风险/验证/回滚 | |
+| A1 | 静态分析 | `flutter analyze` | 0 error / 0 warning / 0 info | **PASS**（2026-11-02 自动验证，0 issue） |
+| A2 | 单元测试 | `flutter test` | 全部通过 | **PASS**（2026-11-02 自动验证，36 passed） |
+| A3 | Release 构建 | `scripts\build.ps1` | 产出 `mdiary.exe` | **PASS**（2026-11-02 自动验证，Release 目录 21.8 MB） |
+| A4 | 提交审查 | `git log` | 每条 commit 含改动/原因/风险/验证/回滚 | **PASS**（3 次提交均按 `.gitmessage` 模板） |
 
 ## B. 目标 1：书写并保存为 .md
 

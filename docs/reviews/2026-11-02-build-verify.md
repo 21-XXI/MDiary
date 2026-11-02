@@ -10,7 +10,7 @@
 | `scripts/build.ps1`（新增） | 仓库路径含非 ASCII 时自动创建 `C:\mdiary_build` 联接并从该路径构建 |
 | `scripts/verify.ps1`（改） | 构建改为调用 `build.ps1`，不再直接 `flutter build`；`analyze`/`test` 保持不变 |
 | `apps/client_flutter/lib/features/entry_editor_page.dart` | 工具栏由「标题 + 分段按钮 + 4 个图标」单行改为两行：第一行标题，第二行模式切换与操作 |
-| `apps/client_flutter/test/data_layer_test.dart`（新增） | 13 个真实 SQLite 集成用例（见下） |
+| `apps/client_flutter/test/data_layer_test.dart`（新增） | 12 个真实 SQLite 集成用例（见下） |
 | `docs/schema.md`（新增） | 表结构、索引、数据生命周期、备份与 v2.0 预留说明 |
 | `README.md` | 补充构建脚本用法与「为什么中文路径不行」 |
 | 其余 20 个 lib/test 文件 | `dart format` 全量格式化（仅缩进/折行，无逻辑改动） |
