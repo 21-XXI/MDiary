@@ -61,7 +61,11 @@ MarkdownDocument parseMarkdownDocument(
     if (value.length >= 2 &&
         ((value.startsWith('"') && value.endsWith('"')) ||
             (value.startsWith("'") && value.endsWith("'")))) {
+      final quote = value[0];
       value = value.substring(1, value.length - 1);
+      if (quote == '"') {
+        value = _unescapeDoubleQuoted(value);
+      }
     }
     if (key.isNotEmpty) meta[key] = value;
   }
@@ -132,10 +136,34 @@ String buildMarkdownDocument({
 }
 
 String _quote(String value) {
+  // 含 YAML 敏感字符（: # " \）或首尾空格时必须加双引号，否则会被误解析
   final needsQuote =
-      value.contains(':') || value.contains('#') || value.startsWith(' ');
+      value.contains(':') ||
+      value.contains('#') ||
+      value.contains('"') ||
+      value.contains('\\') ||
+      value != value.trim();
   if (!needsQuote) return value;
-  return '"${value.replaceAll('"', '\\"')}"';
+  final escaped = value.replaceAll('\\', r'\\').replaceAll('"', r'\"');
+  return '"$escaped"';
+}
+
+/// 解析双引号包裹的值：还原 `\"` 与 `\\`（与 [_quote] 对称）。
+String _unescapeDoubleQuoted(String value) {
+  final buffer = StringBuffer();
+  for (var i = 0; i < value.length; i++) {
+    final char = value[i];
+    if (char == '\\' && i + 1 < value.length) {
+      final next = value[i + 1];
+      if (next == '"' || next == '\\') {
+        buffer.write(next);
+        i++;
+        continue;
+      }
+    }
+    buffer.write(char);
+  }
+  return buffer.toString();
 }
 
 /// 导出文件名：`2026-11-02-标题.md`，去掉 Windows 非法字符。

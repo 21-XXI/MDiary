@@ -71,6 +71,28 @@ void main() {
       final doc = parseMarkdownDocument(text);
       expect(doc.title, 'A: B');
     });
+
+    test('标题含双引号与反斜杠可往返（转义对称）', () {
+      const original = r'路径 C:\tmp "x" 标题';
+      final text = buildMarkdownDocument(
+        title: original,
+        date: DateTime(2026, 1, 2),
+        body: '正文',
+      );
+      expect(text, contains(r'\"'), reason: '双引号应被转义写入');
+
+      final doc = parseMarkdownDocument(text);
+      expect(doc.title, original, reason: '解析端必须还原转义，否则标题会被改写');
+    });
+
+    test('首尾空格在导出时被裁剪而非保留为脏数据', () {
+      final text = buildMarkdownDocument(
+        title: '  两端有空格  ',
+        date: DateTime(2026, 1, 2),
+        body: '正文',
+      );
+      expect(parseMarkdownDocument(text).title, '两端有空格');
+    });
   });
 
   group('文件名', () {
