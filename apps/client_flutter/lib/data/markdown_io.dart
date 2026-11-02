@@ -224,16 +224,3 @@ class MarkdownIo {
     );
   }
 }
-
-/// 供 UI 展示的附件条目信息（标题、大小、是否存在）。
-class AttachmentSummary {
-  const AttachmentSummary({
-    required this.attachment,
-    required this.localPath,
-    required this.exists,
-  });
-
-  final Attachment attachment;
-  final String? localPath;
-  final bool exists;
-}
