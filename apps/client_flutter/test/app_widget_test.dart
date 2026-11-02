@@ -3,6 +3,7 @@ library;
 
 import 'dart:ffi' hide Size;
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -126,6 +127,26 @@ void main() {
     expect(saved.title, '杭州三日');
     expect(saved.bodyMd, contains('西湖下雨'));
     expect(saved.rev, greaterThan(1));
+  }, skip: skipWidgetTests);
+
+  testWidgets('关窗请求会强制落库（最后 0.8s 输入不丢）', (tester) async {
+    await pumpApp(tester);
+    await createEntry(tester);
+    await tester.enterText(find.byKey(const Key('editor-title')), '关窗前输入');
+    await tester.enterText(find.byKey(const Key('editor-body')), '还没到 800ms');
+    await tester.pump(const Duration(milliseconds: 200));
+
+    // 防抖还没触发，数据库里仍是空的
+    final entryId = state.selected!.id;
+    expect(state.entryRepo.findById(entryId)!.title, isEmpty);
+
+    final response = await tester.binding.handleRequestAppExit();
+    expect(response, AppExitResponse.exit);
+    await tester.pumpAndSettle();
+
+    final saved = state.entryRepo.findById(entryId)!;
+    expect(saved.title, '关窗前输入');
+    expect(saved.bodyMd, '还没到 800ms');
   }, skip: skipWidgetTests);
 
   testWidgets('切换预览后渲染 Markdown', (tester) async {

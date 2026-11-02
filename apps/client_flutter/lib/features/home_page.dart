@@ -1,3 +1,5 @@
+import 'dart:ui' show AppExitResponse;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -20,15 +22,26 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
+  AppLifecycleListener? _lifecycleListener;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // 关窗是「最后 800ms 输入」最容易丢的路径：Windows 直接关窗不会走 dispose，
+    // onExitRequested 会在进程退出前给我们一次强制落库的机会。
+    _lifecycleListener = AppLifecycleListener(
+      onExitRequested: () async {
+        final state = mounted ? AppScope.of(context) : null;
+        await state?.flushNow();
+        return AppExitResponse.exit;
+      },
+    );
   }
 
   @override
   void dispose() {
+    _lifecycleListener?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
     _searchFocus.dispose();
