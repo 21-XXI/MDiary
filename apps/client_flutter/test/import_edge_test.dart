@@ -73,9 +73,8 @@ void main() {
     final dir = await makeImportDir('import_b');
     final assets = Directory('${dir.path}/images')..createSync();
     File('${assets.path}/pic.png').writeAsBytesSync(<int>[5, 6, 7]);
-    File('${dir.path}/note.md').writeAsStringSync(
-      '---\ntitle: 子目录\n---\n\n![pic](images/pic.png)',
-    );
+    File('${dir.path}/note.md')
+        .writeAsStringSync('---\ntitle: 子目录\n---\n\n![pic](images/pic.png)');
 
     final result = await io.importDirectory(dir.path, deviceId: 'd');
     expect(result.imported, 1);
@@ -89,9 +88,8 @@ void main() {
 
   test('引用不存在时导入仍成功，仅保留原链接', () async {
     final dir = await makeImportDir('import_c');
-    File('${dir.path}/note.md').writeAsStringSync(
-      '---\ntitle: 缺失图片\n---\n\n![x](images/missing.png)',
-    );
+    File('${dir.path}/note.md')
+        .writeAsStringSync('---\ntitle: 缺失图片\n---\n\n![x](images/missing.png)');
 
     final result = await io.importDirectory(dir.path, deviceId: 'd');
     expect(result.imported, 1);
@@ -116,8 +114,7 @@ void main() {
 
   test('没有 front matter 时用文件名作标题、文件修改时间作日期', () async {
     final dir = await makeImportDir('import_e');
-    final file = File('${dir.path}/我的随笔.md')
-      ..writeAsStringSync('# 随手写\n正文');
+    final file = File('${dir.path}/我的随笔.md')..writeAsStringSync('# 随手写\n正文');
     file.setLastModifiedSync(DateTime(2025, 6, 7, 8, 9));
 
     final result = await io.importDirectory(dir.path, deviceId: 'd');
@@ -130,9 +127,8 @@ void main() {
   test('中文文件名与大写扩展名：扩展名归一化为小写', () async {
     final dir = await makeImportDir('import_f');
     File('${dir.path}/照片.PNG').writeAsBytesSync(<int>[9, 9, 9]);
-    File('${dir.path}/note.md').writeAsStringSync(
-      '---\ntitle: 中文附件\n---\n\n![图](照片.PNG)',
-    );
+    File('${dir.path}/note.md')
+        .writeAsStringSync('---\ntitle: 中文附件\n---\n\n![图](照片.PNG)');
 
     final result = await io.importDirectory(dir.path, deviceId: 'd');
     expect(result.imported, 1);
@@ -145,20 +141,33 @@ void main() {
   }, skip: skip);
 
   test('同日期同标题导出不覆盖，第二条自动加序号', () async {
-    entries.create(deviceId: 'd', date: DateTime(2026, 11, 2), title: '同名', body: 'A');
-    entries.create(deviceId: 'd', date: DateTime(2026, 11, 2), title: '同名', body: 'B');
+    entries.create(
+      deviceId: 'd',
+      date: DateTime(2026, 11, 2),
+      title: '同名',
+      body: 'A',
+    );
+    entries.create(
+      deviceId: 'd',
+      date: DateTime(2026, 11, 2),
+      title: '同名',
+      body: 'B',
+    );
 
     final outDir = Directory('${tempDir.path}/out')..createSync();
     final result = await io.exportAll(outDir.path);
     expect(result.files.length, 2);
-    final names = result.files.map((f) => File(f).uri.pathSegments.last).toList();
+    final names = result.files
+        .map((f) => File(f).uri.pathSegments.last)
+        .toList();
     expect(names.where((n) => n == '2026-11-02-同名.md').length, 1);
     expect(names.any((n) => n.contains('(2)')), isTrue);
   }, skip: skip);
 
   test('同一目录重复导入：全部按重复跳过', () async {
     final dir = await makeImportDir('import_g');
-    File('${dir.path}/a.md').writeAsStringSync('---\ntitle: A\ndate: 2026-01-01\n---\n\n内容 A');
+    File('${dir.path}/a.md')
+        .writeAsStringSync('---\ntitle: A\ndate: 2026-01-01\n---\n\n内容 A');
 
     final first = await io.importDirectory(dir.path, deviceId: 'd');
     expect(first.imported, 1);

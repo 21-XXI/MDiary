@@ -140,12 +140,18 @@ class EntryListTile extends StatelessWidget {
   }
 }
 
-/// 保存状态指示（右上角）。
+/// 保存状态指示（右上角）。保存失败时可点击重试（pending 内容仍在内存里）。
 class SaveIndicator extends StatelessWidget {
-  const SaveIndicator({super.key, required this.status, this.error});
+  const SaveIndicator({
+    super.key,
+    required this.status,
+    this.error,
+    this.onRetry,
+  });
 
   final SaveStatus status;
   final String? error;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -177,19 +183,30 @@ class SaveIndicator extends StatelessWidget {
         theme.colorScheme.error,
       ),
     };
+    final canRetry = status == SaveStatus.error && onRetry != null;
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 4),
+        Text(
+          canRetry ? '$label · 点此重试' : label,
+          style: theme.textTheme.labelSmall?.copyWith(color: color),
+        ),
+      ],
+    );
     return Tooltip(
-      message: status == SaveStatus.error ? (error ?? '保存失败') : label,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(color: color),
-          ),
-        ],
-      ),
+      message: status == SaveStatus.error ? (error ?? '保存失败；点击重试') : label,
+      child: canRetry
+          ? InkWell(
+              onTap: onRetry,
+              borderRadius: BorderRadius.circular(4),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                child: content,
+              ),
+            )
+          : content,
     );
   }
 }

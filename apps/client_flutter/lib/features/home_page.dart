@@ -365,7 +365,11 @@ class _StatusBar extends StatelessWidget {
             ),
           ],
           const Spacer(),
-          SaveIndicator(status: state.status, error: state.lastError),
+          SaveIndicator(
+            status: state.status,
+            error: state.lastError,
+            onRetry: () => state.flushNow(),
+          ),
           const SizedBox(width: 14),
           Text(
             'v1.0.0',

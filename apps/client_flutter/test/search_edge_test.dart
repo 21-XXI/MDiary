@@ -71,7 +71,11 @@ void main() {
     });
 
     test('emoji 与中英混排可被检索', () {
-      entries.create(deviceId: 'd', title: '今天很开心 😀', body: 'mixed 内容 with English');
+      entries.create(
+        deviceId: 'd',
+        title: '今天很开心 😀',
+        body: 'mixed 内容 with English',
+      );
       expect(entries.query(keyword: '😀').length, 1);
       expect(entries.query(keyword: 'English').length, 1);
       expect(entries.query(keyword: '常开').length, 0);
@@ -87,7 +91,11 @@ void main() {
     });
 
     test('大小写不敏感（英文）', () {
-      entries.create(deviceId: 'd', title: 'Hello World', body: 'Dart And Flutter');
+      entries.create(
+        deviceId: 'd',
+        title: 'Hello World',
+        body: 'Dart And Flutter',
+      );
       expect(entries.query(keyword: 'hello').length, 1);
       expect(entries.query(keyword: 'FLUTTER').length, 1);
     });
@@ -104,30 +112,45 @@ void main() {
     ];
 
     for (final title in titles) {
-      test('导出再导入后标题保留：${title.length > 20 ? '${title.substring(0, 20)}…' : title}', () async {
-        final entry = entries.create(deviceId: 'd', date: DateTime(2026, 11, 2), title: title, body: '正文');
-        final outDir = Directory('${tempDir.path}/out_${title.hashCode}')..createSync();
-        final path = await io.exportEntry(entries.findById(entry.id)!, outDir.path);
+      test(
+        '导出再导入后标题保留：${title.length > 20 ? '${title.substring(0, 20)}…' : title}',
+        () async {
+          final entry = entries.create(
+            deviceId: 'd',
+            date: DateTime(2026, 11, 2),
+            title: title,
+            body: '正文',
+          );
+          final outDir = Directory('${tempDir.path}/out_${title.hashCode}')
+            ..createSync();
+          final path = await io.exportEntry(
+            entries.findById(entry.id)!,
+            outDir.path,
+          );
 
-        // 直接解析导出文件
-        final doc = parseMarkdownDocument(File(path).readAsStringSync());
-        expect(doc.title, title.trim().isEmpty ? '无标题' : title.trim());
-        expect(doc.date, DateTime(2026, 11, 2));
+          // 直接解析导出文件
+          final doc = parseMarkdownDocument(File(path).readAsStringSync());
+          expect(doc.title, title.trim().isEmpty ? '无标题' : title.trim());
+          expect(doc.date, DateTime(2026, 11, 2));
 
-        // 导入到新库
-        final db2 = AppDatabase.inMemory();
-        final entries2 = EntryRepository(db2);
-        final io2 = MarkdownIo(
-          entries: entries2,
-          attachments: AttachmentRepository(db2),
-          store: AttachmentStore(Directory('${tempDir.path}/att2_${title.hashCode}')),
-        );
-        final result = await io2.importDirectory(outDir.path, deviceId: 'd2');
-        expect(result.imported, 1);
-        expect(result.errors, isEmpty);
-        expect(entries2.query().single.title.trim(), doc.title);
-        db2.dispose();
-      }, skip: skip);
+          // 导入到新库
+          final db2 = AppDatabase.inMemory();
+          final entries2 = EntryRepository(db2);
+          final io2 = MarkdownIo(
+            entries: entries2,
+            attachments: AttachmentRepository(db2),
+            store: AttachmentStore(
+              Directory('${tempDir.path}/att2_${title.hashCode}'),
+            ),
+          );
+          final result = await io2.importDirectory(outDir.path, deviceId: 'd2');
+          expect(result.imported, 1);
+          expect(result.errors, isEmpty);
+          expect(entries2.query().single.title.trim(), doc.title);
+          db2.dispose();
+        },
+        skip: skip,
+      );
     }
   }, skip: skip);
 }

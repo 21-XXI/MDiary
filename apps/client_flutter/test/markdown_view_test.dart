@@ -134,7 +134,10 @@ final x = 1;
       const MaterialApp(
         home: Scaffold(
           body: SingleChildScrollView(
-            child: MarkdownView(data: markdown, resolveLocalPath: _neverResolve),
+            child: MarkdownView(
+              data: markdown,
+              resolveLocalPath: _neverResolve,
+            ),
           ),
         ),
       ),

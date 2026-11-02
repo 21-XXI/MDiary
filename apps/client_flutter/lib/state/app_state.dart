@@ -235,21 +235,27 @@ class AppState extends ChangeNotifier {
     if (id == null) return;
     final title = _pendingTitle;
     final body = _pendingBody;
-    _pendingId = null;
     _status = SaveStatus.saving;
     notifyListeners();
     try {
       final saved = entryRepo.saveContent(id, title: title, body: body);
+      // 只有写成功才清 pending：失败时必须保留，下一次 flush（输入/切走/Ctrl+S/
+      // 关窗）会自动重试，否则一次写库失败就等于静默丢稿。
+      _pendingId = null;
       final index = _entries.indexWhere((e) => e.id == id);
       if (index >= 0) _entries[index] = saved;
       if (_selected?.id == id) _selected = saved;
       _status = SaveStatus.saved;
+      _lastError = null;
     } catch (error) {
       _status = SaveStatus.error;
       _lastError = error.toString();
     }
     notifyListeners();
   }
+
+  /// 是否存在尚未成功写库的内容（保存失败时 UI 可据此提示「点此重试」）。
+  bool get hasUnsavedChanges => _pendingId != null;
 
   Future<void> togglePin(Entry entry) async {
     await flushNow();
