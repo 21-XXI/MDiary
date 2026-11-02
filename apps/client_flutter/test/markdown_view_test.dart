@@ -96,6 +96,57 @@ void main() {
     );
     expect(find.text('还没有内容'), findsOneWidget);
   });
+
+  testWidgets('GFM 语法（标题/列表/引用/代码块/表格/删除线）渲染无异常', (tester) async {
+    const markdown = '''
+# 一级标题
+
+## 二级标题
+
+- 项目一
+- 项目二
+  - 嵌套项
+
+1. 有序一
+2. 有序二
+
+> 引用段落
+> 第二行
+
+```dart
+final x = 1;
+```
+
+| 列 A | 列 B |
+|---|---|
+| a1 | b1 |
+| a2 | b2 |
+
+~~删除线~~ 与 **粗体** 与 `行内代码`
+
+---
+
+- [x] 已完成
+- [ ] 未完成
+''';
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: MarkdownView(data: markdown, resolveLocalPath: _neverResolve),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('一级标题'), findsOneWidget);
+    expect(find.textContaining('项目一'), findsOneWidget);
+    expect(find.textContaining('引用段落'), findsOneWidget);
+    expect(find.textContaining('a1'), findsOneWidget);
+  });
 }
 
 String? _neverResolve(String reference) => null;

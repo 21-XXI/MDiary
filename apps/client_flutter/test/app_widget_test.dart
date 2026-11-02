@@ -235,6 +235,55 @@ void main() {
     expect(state.entryRepo.findById(firstId), isNotNull);
   }, skip: skipWidgetTests);
 
+  testWidgets('超过 25 MB 的附件被拒绝，且不写库', (tester) async {
+    await pumpApp(tester);
+    await createEntry(tester);
+    // 26 MB 全零字节，仅用于触发上限判断（不会真的写盘）
+    nextPickedFile = PickedFile(
+      name: 'huge.bin',
+      bytes: Uint8List(26 * 1024 * 1024),
+    );
+
+    await tapAsync(tester, find.byTooltip('插入附件（≤ 25 MB）'));
+    await tester.pumpAndSettle();
+
+    final entry = state.selected!;
+    expect(entry.bodyMd, isEmpty, reason: '被拒绝时不应插入引用');
+    expect(state.attachmentCountOf(entry.id), 0, reason: '被拒绝时不应写附件表');
+    // 附件目录可能压根没被创建（更彻底），存在时也不应有文件
+    final archiveDir = Directory('${tempDir.path}/attachments');
+    final archiveFiles = archiveDir.existsSync()
+        ? archiveDir.listSync(recursive: true).whereType<File>().toList()
+        : <File>[];
+    expect(archiveFiles.length, 0, reason: '被拒绝时不应落盘');
+    expect(find.textContaining('添加附件失败'), findsOneWidget);
+  }, skip: skipWidgetTests);
+
+  testWidgets('10,000 字长文：保存、重载与预览均正常', (tester) async {
+    await pumpApp(tester);
+    await createEntry(tester);
+    final longBody = List<String>.generate(
+      400,
+      (i) => '第 $i 段：这是一段用于模拟长文的文字，包含中文与 English 混排。',
+    ).join('\n');
+    expect(longBody.length, greaterThan(10000));
+
+    await tester.enterText(find.byKey(const Key('editor-body')), longBody);
+    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pumpAndSettle();
+
+    final saved = state.entryRepo.findById(state.selected!.id)!;
+    expect(saved.bodyMd.length, longBody.length);
+
+    await tester.tap(find.text('预览'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull, reason: '长文预览不应抛异常');
+
+    await tester.tap(find.text('编辑'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  }, skip: skipWidgetTests);
+
   testWidgets('工具栏导出按钮生成 .md 文件', (tester) async {
     await pumpApp(tester);
     await createEntry(tester);
