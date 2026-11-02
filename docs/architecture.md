@@ -11,7 +11,8 @@ apps/client_flutter/
     main.dart                 入口：初始化数据库、附件库、启动失败兜底页
     app.dart                  MaterialApp + AppScope（InheritedNotifier）
     core/
-      app_paths.dart          应用数据目录（%APPDATA%\MDiary，可用 MDIARY_HOME 覆盖）
+      app_paths.dart          应用数据目录（%APPDATA%\MDiary，可用 MDIARY_HOME 覆盖；
+                              默认目录不可写时回退到程序旁 MDiaryData / 临时目录）
       theme.dart              主题、字号、编辑器字体
       formatters.dart         日期/字数/字节格式化
       ids.dart                uuid v4 / device_id

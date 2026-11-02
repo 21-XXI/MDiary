@@ -60,6 +60,7 @@ class AppState extends ChangeNotifier {
     SingleFilePicker? filePicker,
     DirectoryPicker? directoryPicker,
     this.dataRootPath = '',
+    this.dataRootNotice,
   }) : _filePicker = filePicker ?? _defaultFilePicker,
        _directoryPicker = directoryPicker ?? _defaultDirectoryPicker;
 
@@ -75,6 +76,9 @@ class AppState extends ChangeNotifier {
 
   /// 数据根目录（设置页展示/打开用）。由 main 注入，UI 不直接依赖全局 AppPaths。
   final String dataRootPath;
+
+  /// 默认数据目录不可写、退回备用目录时的说明；正常启动为 null。
+  final String? dataRootNotice;
 
   static Future<PickedFile?> _defaultFilePicker() async {
     final file = await FilePicker.pickFile();

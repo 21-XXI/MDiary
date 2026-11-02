@@ -19,6 +19,15 @@ Future<void> main() async {
   try {
     await AppPaths.init();
     logger = AppLogger(resolveLogFile(AppPaths.root.path))..install();
+    final resolution = AppPaths.resolution;
+    if (resolution != null && resolution.isFallback) {
+      // 数据目录被换过位置，日志里必须留痕，否则用户会以为日记丢了。
+      logger.log(
+        'Startup',
+        '默认数据目录不可写，本次改用 ${resolution.path}\n'
+        '原因：${resolution.fallbackReason}',
+      );
+    }
 
     final db = AppDatabase.openDefault();
     final store = AttachmentStore(AppPaths.attachmentsDir);
@@ -40,6 +49,7 @@ Future<void> main() async {
         store: store,
       ),
       dataRootPath: AppPaths.root.path,
+      dataRootNotice: AppPaths.fallbackReason,
     );
     await state.bootstrap();
     runApp(MDiaryApp(state: state));
@@ -86,6 +96,8 @@ class _StartupFailureApp extends StatelessWidget {
               const SelectableText('错误日志：%APPDATA%\\MDiary\\logs\\error.log'),
               const SizedBox(height: 12),
               const Text('可尝试：确认该目录可写、数据库文件未被其他程序占用（例如同时开了两个实例），再重新启动。'),
+              const SizedBox(height: 8),
+              const Text('若所在环境不允许写该目录（沙箱、漫游配置异常等），可设置环境变量 MDIARY_HOME 指向任意可写目录后重启。'),
               const SizedBox(height: 16),
               const Text(
                 '技术详情：',

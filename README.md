@@ -58,7 +58,13 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Clean   # 清理后�
 | 数据库 | `%APPDATA%\MDiary\mdiary.sqlite` |
 | 附件库 | `%APPDATA%\MDiary\attachments\<sha256前两位>\<sha256>.<ext>` |
 | 错误日志 | `%APPDATA%\MDiary\logs\error.log`（发生异常时才创建，超过 1 MB 轮转为 `error.log.old`） |
-| 数据根目录覆盖 | 环境变量 `MDIARY_HOME`（便携模式） |
+| 数据根目录覆盖 | 环境变量 `MDIARY_HOME`（便携模式；实际数据目录为 `%MDIARY_HOME%\MDiary`） |
+
+**默认目录不可写时不会崩溃**：受限环境（沙箱、低权限令牌、漫游配置被重定向，或刚删过目录就重启）
+下 `%APPDATA%\MDiary` 可能只给读权限。此时按
+`%APPDATA%\MDiary` → `mdiary.exe` 旁的 `MDiaryData` → 系统临时目录 `MDiary`
+的顺序选第一个真能写的位置，首页顶部常驻提示实际使用的目录，设置页给出原因与完整路径；
+错误日志里也会记一条 `Startup`。要固定目录就用 `MDIARY_HOME`（指定后不再回退，写不了直接报错）。
 
 备份 = 复制整个 `%APPDATA%\MDiary`，或使用「整库导出」得到纯 Markdown 副本。
 

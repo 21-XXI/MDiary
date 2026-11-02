@@ -69,14 +69,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       body: Focus(
         autofocus: true,
         onKeyEvent: _handleKeyEvent,
-        child: Row(
+        child: Column(
           children: <Widget>[
-            SizedBox(
-              width: _listPaneWidth(context),
-              child: _buildListPane(context, state),
+            if (state.dataRootNotice != null) _DataRootNoticeBar(state: state),
+            Expanded(
+              child: Row(
+                children: <Widget>[
+                  SizedBox(
+                    width: _listPaneWidth(context),
+                    child: _buildListPane(context, state),
+                  ),
+                  const VerticalDivider(width: 1),
+                  Expanded(child: _buildContentPane(context, state)),
+                ],
+              ),
             ),
-            const VerticalDivider(width: 1),
-            Expanded(child: _buildContentPane(context, state)),
           ],
         ),
       ),
@@ -327,6 +334,49 @@ class _ListItem {
 
   final String? dateHeader;
   final Entry? entry;
+}
+
+/// 数据没能放在默认目录时的常驻提示：不能让用户以为日记丢了。
+class _DataRootNoticeBar extends StatelessWidget {
+  const _DataRootNoticeBar({required this.state});
+
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Material(
+      color: scheme.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
+        child: Row(
+          children: <Widget>[
+            Icon(
+              Icons.warning_amber_rounded,
+              size: 18,
+              color: scheme.onErrorContainer,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '默认数据目录不可写，本次数据存放在：${state.dataRootPath}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onErrorContainer,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => state.openInSystem(state.dataRootPath),
+              child: const Text('打开目录'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _StatusBar extends StatelessWidget {

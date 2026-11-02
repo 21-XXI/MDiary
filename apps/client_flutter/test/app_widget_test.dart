@@ -406,6 +406,39 @@ void main() {
     // 惰性构建：不应把 1000 条全建出来（视口 + cacheExtent 内通常十几到几十条）
     expect(tiles, lessThan(60), reason: '列表应惰性构建，而不是一次渲染全部 1000 条');
   }, skip: skipWidgetTests);
+
+  testWidgets('默认数据目录不可写时，首页常驻提示改用的目录', (tester) async {
+    final noticeState = AppState(
+      db: db,
+      entryRepo: state.entryRepo,
+      attachmentRepo: state.attachmentRepo,
+      metaRepo: state.metaRepo,
+      store: state.store,
+      markdownIo: state.markdownIo,
+      filePicker: () async => null,
+      directoryPicker: (title) async => null,
+      dataRootPath: '${tempDir.path}/MDiaryData',
+      dataRootNotice: r'C:\Users\demo\AppData\Roaming\MDiary（拒绝访问，errno = 5）',
+    );
+    await noticeState.bootstrap();
+    addTearDown(noticeState.dispose);
+
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(MDiaryApp(state: noticeState));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('默认数据目录不可写'), findsOneWidget);
+    expect(find.textContaining('MDiaryData'), findsOneWidget);
+    expect(tester.takeException(), isNull, reason: '提示条不应把 800x600 的布局挤溢出');
+
+    // 文字再长也不能把「打开目录」按钮顶出可视区域
+    final button = tester.getRect(find.widgetWithText(TextButton, '打开目录'));
+    expect(button.right, lessThanOrEqualTo(tester.view.physicalSize.width));
+  }, skip: skipWidgetTests);
 }
 
 // 1x1 透明 PNG：足够走通「图片附件」的完整链路

@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -98,6 +98,21 @@ class SettingsPage extends StatelessWidget {
                     onPressed: () => state.openInSystem(state.dataRootPath),
                   ),
                 ),
+                if (state.dataRootNotice != null) ...<Widget>[
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: Icon(
+                      Icons.warning_amber_rounded,
+                      color: theme.colorScheme.error,
+                    ),
+                    title: const Text('数据未存放在默认位置'),
+                    subtitle: Text(
+                      '默认目录不可写，已自动改用上面的目录。'
+                      '原因：${state.dataRootNotice}',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                ],
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.image_outlined),
