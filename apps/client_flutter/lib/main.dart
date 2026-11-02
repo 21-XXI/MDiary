@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'app.dart';
+import 'core/app_logger.dart';
 import 'core/app_paths.dart';
 import 'data/attachment_repository.dart';
 import 'data/attachment_store.dart';
@@ -14,8 +15,11 @@ import 'state/app_state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  AppLogger? logger;
   try {
     await AppPaths.init();
+    logger = AppLogger(resolveLogFile(AppPaths.root.path))..install();
+
     final db = AppDatabase.openDefault();
     final store = AttachmentStore(AppPaths.attachmentsDir);
     await store.directory.create(recursive: true);
@@ -40,6 +44,10 @@ Future<void> main() async {
     await state.bootstrap();
     runApp(MDiaryApp(state: state));
   } catch (error, stack) {
+    // 启动阶段的异常也要落盘，否则用户只能看到「打不开」
+    final fallback = logger ?? AppLogger(resolveLogFile(''));
+    fallback.log('Startup', error, stack);
+    fallback.install();
     runApp(_StartupFailureApp(message: '$error', details: '$stack'));
   }
 }
@@ -74,13 +82,14 @@ class _StartupFailureApp extends StatelessWidget {
               SelectableText('原因：$message'),
               const SizedBox(height: 8),
               SelectableText('数据目录：$dataPath\\MDiary'),
+              const SizedBox(height: 8),
+              const SelectableText('错误日志：%APPDATA%\\MDiary\\logs\\error.log'),
               const SizedBox(height: 12),
-              const Text('可尝试：确认该目录可写、数据库文件未被其他程序占用（例如同时开了两个实例），再重新启动。'),
-              const SizedBox(height: 16),
               const Text(
-                '技术详情：',
-                style: TextStyle(fontWeight: FontWeight.w600),
+                '可尝试：确认该目录可写、数据库文件未被其他程序占用（例如同时开了两个实例），再重新启动。',
               ),
+              const SizedBox(height: 16),
+              const Text('技术详情：', style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
               Expanded(
                 child: Container(
