@@ -1,0 +1,30 @@
+name: mdiary
+description: 跨平台 Markdown 日记程序（v1.0 Windows 桌面）
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # 本地 SQLite：2.x + sqlite3_flutter_libs 自带各平台预编译库，
+  # 不依赖构建期从 GitHub 下载（内网/国内环境更可靠）
+  sqlite3: ^2.9.4
+  sqlite3_flutter_libs: ^0.5.42
+  path: ^1.9.1
+  # 附件内容寻址（sha256）
+  crypto: ^3.0.8
+  # 文件/目录选择对话框
+  file_picker: ^13.3.1
+  # Markdown 渲染（flutter_markdown 的社区续作）
+  flutter_markdown_plus: ^1.0.12
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

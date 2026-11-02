@@ -1,0 +1,16 @@
+import 'dart:math';
+
+/// 生成 uuid v4（避免引入 uuid 依赖）。
+final Random _secure = Random.secure();
+
+String newId() {
+  final bytes = List<int>.generate(16, (_) => _secure.nextInt(256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant
+  final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-'
+      '${hex.substring(16, 20)}-${hex.substring(20)}';
+}
+
+/// 本机标识：v2.0 同步时用于标记条目来源设备。
+String newDeviceId() => newId();

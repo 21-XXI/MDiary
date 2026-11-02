@@ -1,0 +1,20 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  errors:
+    # 中文注释与界面文案不强制英文
+    avoid_print: ignore
+  exclude:
+    - "build/**"
+    - "**/*.g.dart"
+    - windows/**
+
+linter:
+  rules:
+    prefer_single_quotes: true
+    prefer_final_locals: true
+    always_declare_return_types: true
+    require_trailing_commas: false
+    sort_child_properties_last: true
+    use_super_parameters: true
+    avoid_unnecessary_containers: true

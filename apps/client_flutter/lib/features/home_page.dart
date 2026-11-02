@@ -1,0 +1,292 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../core/formatters.dart';
+import '../data/models.dart';
+import '../state/app_scope.dart';
+import '../state/app_state.dart';
+import '../ui/widgets.dart';
+import 'entry_editor_page.dart';
+import 'settings_page.dart';
+import 'trash_page.dart';
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _searchController.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    if (!mounted) return;
+    // 窗口失焦/最小化/退出时强制落库，配合 800ms 防抖形成双保险。
+    if (lifecycle == AppLifecycleState.inactive ||
+        lifecycle == AppLifecycleState.paused ||
+        lifecycle == AppLifecycleState.detached) {
+      AppScope.of(context).flushNow();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    if (state.loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    return Scaffold(
+      body: CallbackShortcuts(
+        bindings: <ShortcutActivator, VoidCallback>{
+          const SingleActivator(LogicalKeyboardKey.keyN, control: true): () => state.createEntry(),
+          const SingleActivator(LogicalKeyboardKey.keyS, control: true): () => state.flushNow(),
+          const SingleActivator(LogicalKeyboardKey.keyF, control: true): () => _searchFocus.requestFocus(),
+          const SingleActivator(LogicalKeyboardKey.escape): () => _searchFocus.unfocus(),
+        },
+        child: Focus(
+          autofocus: true,
+          child: Row(
+            children: <Widget>[
+              SizedBox(width: 332, child: _buildListPane(context, state)),
+              const VerticalDivider(width: 1),
+              Expanded(child: _buildContentPane(context, state)),
+            ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: _StatusBar(state: state),
+    );
+  }
+
+  // ───────────────────────────── 左栏 ─────────────────────────────
+
+  Widget _buildListPane(BuildContext context, AppState state) {
+    return Column(
+      children: <Widget>[
+        _buildHeader(context, state),
+        const Divider(height: 1),
+        Expanded(child: _buildEntryList(context, state)),
+      ],
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, AppState state) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 10),
+      child: Column(
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              FilledButton.icon(
+                onPressed: () => state.createEntry(),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('新建日记'),
+                style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14)),
+              ),
+              const Spacer(),
+              IconButton(
+                tooltip: state.trashCount > 0 ? '回收站（${state.trashCount}）' : '回收站',
+                onPressed: () => _openPage(const TrashPage()),
+                icon: Badge(
+                  isLabelVisible: state.trashCount > 0,
+                  label: Text('${state.trashCount}'),
+                  child: const Icon(Icons.delete_outline),
+                ),
+              ),
+              IconButton(
+                tooltip: '设置',
+                onPressed: () => _openPage(const SettingsPage()),
+                icon: const Icon(Icons.settings_outlined),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _searchController,
+            focusNode: _searchFocus,
+            onChanged: state.setQuery,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: '搜索标题或正文（Ctrl+F）',
+              hintStyle: theme.textTheme.bodySmall,
+              prefixIcon: const Icon(Icons.search, size: 18),
+              prefixIconConstraints: const BoxConstraints(minWidth: 36),
+              suffixIcon: state.query.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: '清空',
+                      iconSize: 16,
+                      onPressed: () {
+                        _searchController.clear();
+                        state.setQuery('');
+                      },
+                      icon: const Icon(Icons.close),
+                    ),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+              filled: true,
+              fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+              contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEntryList(BuildContext context, AppState state) {
+    final entries = state.entries;
+    if (entries.isEmpty) {
+      return EmptyState(
+        icon: state.query.isEmpty ? Icons.menu_book_outlined : Icons.search_off,
+        title: state.query.isEmpty ? '还没有日记' : '没有匹配的日记',
+        description: state.query.isEmpty ? '按 Ctrl+N 开始写第一篇' : '换个关键词试试',
+        action: state.query.isEmpty
+            ? FilledButton.icon(
+                onPressed: () => state.createEntry(),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('新建日记'),
+              )
+            : null,
+      );
+    }
+    // 按日期分组：插入 "日期 -> 条目" 的扁平序列，交给 ListView.builder 惰性构建。
+    final items = <_ListItem>[];
+    String? lastDate;
+    for (final entry in entries) {
+      final date = formatDate(entry.entryDate);
+      if (date != lastDate) {
+        items.add(_ListItem.header(date));
+        lastDate = date;
+      }
+      items.add(_ListItem.entry(entry));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 12),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final item = items[index];
+        if (item.dateHeader != null) {
+          return SectionLabel(item.dateHeader!);
+        }
+        final entry = item.entry!;
+        return EntryListTile(
+          entry: entry,
+          selected: state.selected?.id == entry.id,
+          attachmentCount: state.attachmentCountOf(entry.id),
+          onTap: () => state.select(entry),
+          onMenu: (position) => _showEntryMenu(context, state, entry, position),
+        );
+      },
+    );
+  }
+
+  Future<void> _showEntryMenu(BuildContext context, AppState state, Entry entry, Offset position) async {
+    final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final selected = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        overlay.size.width - position.dx,
+        overlay.size.height - position.dy,
+      ),
+      items: <PopupMenuEntry<String>>[
+        PopupMenuItem<String>(value: 'pin', child: Text(entry.pinned ? '取消置顶' : '置顶')),
+        const PopupMenuItem<String>(value: 'export', child: Text('导出为 .md')),
+        const PopupMenuDivider(),
+        const PopupMenuItem<String>(value: 'delete', child: Text('移到回收站')),
+      ],
+    );
+    if (selected == null || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    if (selected == 'pin') {
+      await state.togglePin(entry);
+    } else if (selected == 'export') {
+      final path = await state.exportCurrent(entry);
+      if (path != null) {
+        messenger.showSnackBar(SnackBar(content: Text('已导出到 $path')));
+      }
+    } else if (selected == 'delete') {
+      await state.deleteEntry(entry);
+    }
+  }
+
+  // ───────────────────────────── 右栏 ─────────────────────────────
+
+  Widget _buildContentPane(BuildContext context, AppState state) {
+    final selected = state.selected;
+    if (selected == null) {
+      return const EmptyState(
+        icon: Icons.edit_note,
+        title: '选择一篇日记，或新建',
+        description: '内容输入后自动保存为 Markdown，可随时导出 .md 文件',
+      );
+    }
+    return EntryEditorPage(key: ValueKey<String>(selected.id), state: state, entry: selected);
+  }
+
+  void _openPage(Widget page) {
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (context) => page));
+  }
+}
+
+class _ListItem {
+  _ListItem.header(this.dateHeader) : entry = null;
+
+  _ListItem.entry(this.entry) : dateHeader = null;
+
+  final String? dateHeader;
+  final Entry? entry;
+}
+
+class _StatusBar extends StatelessWidget {
+  const _StatusBar({required this.state});
+
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        border: Border(top: BorderSide(color: scheme.outlineVariant, width: 0.6)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Text('${state.entries.length} 篇', style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant)),
+          if (state.query.isNotEmpty) ...<Widget>[
+            const SizedBox(width: 10),
+            Text('搜索：${state.query}', style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant)),
+          ],
+          const Spacer(),
+          SaveIndicator(status: state.status, error: state.lastError),
+          const SizedBox(width: 14),
+          Text('v1.0.0', style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant)),
+        ],
+      ),
+    );
+  }
+}

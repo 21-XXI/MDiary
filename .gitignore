@@ -8,7 +8,10 @@ build/
 .flutter-plugins-dependencies
 *.iml
 .idea/
-.metadata
+
+# 本地命令输出（analyze/test/doctor 临时记录）
+*_out.txt
+doctor.txt
 
 # Windows ephemeral build artifacts
 apps/client_flutter/windows/flutter/ephemeral/

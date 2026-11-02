@@ -8,25 +8,32 @@
 ```
 apps/client_flutter/
   lib/
-    main.dart                 入口：初始化数据库、附件库、主题
-    app.dart                  MaterialApp + go_router 路由表
+    main.dart                 入口：初始化数据库、附件库、启动失败兜底页
+    app.dart                  MaterialApp + AppScope（InheritedNotifier）
     core/
-      app_paths.dart          应用数据目录（%APPDATA%\MDiary）
+      app_paths.dart          应用数据目录（%APPDATA%\MDiary，可用 MDIARY_HOME 覆盖）
       theme.dart              主题、字号、编辑器字体
       formatters.dart         日期/字数/字节格式化
+      ids.dart                uuid v4 / device_id
     data/
-      db/tables.dart          drift 表定义
-      db/app_database.dart    连接、迁移、查询
-      repositories/*.dart     entry / attachment / tag / meta 仓储
-      services/
-        attachment_store.dart 内容寻址附件库（sha256）
-        markdown_io.dart      .md 导出/导入（front matter + 附件搬运）
+      database.dart           sqlite3 连接、PRAGMA、PRAGMA user_version 迁移
+      models.dart             Entry / Attachment 不可变模型
+      entry_repository.dart   条目读写（唯一写入路径）
+      attachment_repository.dart
+      meta_repository.dart    key-value 配置
+      attachment_store.dart   内容寻址附件库（sha256）
+      markdown_document.dart  front matter 解析/生成、文件名规范化（纯函数，可单测）
+      markdown_io.dart        .md 导出/导入（附件搬运）
+    state/
+      app_state.dart          ChangeNotifier：列表、选中、自动保存调度
     features/
-      entries/                列表、编辑器（controller + page）
-      search/                 搜索
-      trash/                  回收站
-      settings/               设置
-    ui/widgets/               可复用组件（MarkdownView、AttachmentTile…）
+      home_page.dart          双栏：列表 + 编辑区、快捷键、状态栏
+      entry_editor_page.dart  标题/正文/工具栏/附件条/预览
+      trash_page.dart         回收站
+      settings_page.dart      外观、数据、导入导出、关于
+    ui/
+      markdown_view.dart      Markdown 渲染 + 本地附件解析
+      widgets.dart            列表项、保存指示、空状态
   test/                       纯逻辑单测
 ```
 
@@ -110,26 +117,27 @@ FTS5 trigram 作为 v1.1 优化项：届时只替换 `EntryRepository.search` �
 
 | 包 | 用途 | 备注 |
 |---|---|---|
-| flutter_riverpod | 状态管理 | 依赖注入 + 异步状态 |
-| go_router | 路由 | 列表/编辑/回收站/设置 |
-| drift + sqlite3_flutter_libs | 本地库 | 编译期 SQL 校验、版本迁移 |
-| path_provider / path | 数据目录 | `%APPDATA%` |
-| uuid | 主键 | v4 |
+| sqlite3 2.x + sqlite3_flutter_libs | 本地库 | 包内自带各平台预编译 SQLite，构建期不需要访问 GitHub（3.x 的 hooks 会下载 DLL，国内网络不可达） |
+| path | 路径拼接 | 纯 Dart |
 | crypto | sha256 | 附件寻址 |
-| intl | 日期格式 | 中文日期 |
-| file_picker | 选文件/选目录 | Windows 原生对话框 |
-| flutter_markdown_plus | Markdown 渲染 | flutter_markdown 已停止维护的社区续作 |
-| shared_preferences | 轻量设置 | 主题、字号 |
+| file_picker | 选文件 / 选目录 | Windows 原生对话框 |
+| flutter_markdown_plus | Markdown 渲染 | `flutter_markdown` 停止维护后的社区续作 |
+| dart:io（内置） | 数据目录、打开文件 | 不引入 path_provider / open_filex |
+| ChangeNotifier（内置） | 状态管理 | 单窗口应用够用，少一层依赖 |
 
-刻意不引入：window_manager / desktop_drop / open_filex（减少平台插件风险，用 dart:io Process 替代打开文件）。
+刻意不引入：riverpod / go_router / drift / shared_preferences / window_manager / desktop_drop /
+open_filex —— 每多一个依赖就多一类首次编译失败与版本冲突的可能，v1.0 用内置能力覆盖。
 
 ## 5. 与需求的偏差登记
 
 | 项 | project.md 原文 | v1.0 实现 | 处理 |
 |---|---|---|---|
 | 附件投递方式 | 拖拽 + 粘贴 + 菜单 | 菜单（file_picker） | 拖拽需 desktop_drop 插件，v1.1 评估 |
-| 搜索 | FTS5 trigram | LIKE 子串 | 语义等价（子串命中），性能待 1k 篇实测后决定是否上 FTS5 |
+| 搜索 | FTS5 trigram | LIKE 子串 | 子串命中准确，1k 篇实测后决定是否上 FTS5 |
 | 工作区（Vault） | 用户自选目录 + assets/ | 固定 `%APPDATA%\MDiary`，导出时生成 assets/ | v1.1 支持迁移目录 |
+| ORM | drift + 代码生成 | 手写 SQL + sqlite3（`database.dart`） | schema 小且固定，去掉 build_runner 这一失败面 |
+| 状态管理 | Riverpod | ChangeNotifier + InheritedNotifier | 单窗口应用无跨页共享需求 |
+| 路由 | go_router | Navigator.push | 仅 4 个页面，不需要声明式路由 |
 
 ## 6. 验证方式
 
