@@ -17,6 +17,7 @@ import 'package:mdiary/data/meta_repository.dart';
 import 'package:mdiary/features/settings_page.dart';
 import 'package:mdiary/state/app_state.dart';
 import 'package:mdiary/ui/markdown_view.dart';
+import 'package:mdiary/ui/widgets.dart';
 import 'package:sqlite3/open.dart';
 
 /// 界面级 widget 测试（无头）：自动保存、预览切换、快捷键、搜索。
@@ -306,6 +307,34 @@ void main() {
       await Future<void>.delayed(const Duration(seconds: 5));
     });
     await tester.pumpAndSettle();
+  }, skip: skipWidgetTests);
+
+  testWidgets('1000 篇时列表惰性构建（首屏只建可见项）', (tester) async {
+    db.raw.execute('BEGIN');
+    for (var i = 0; i < 1000; i++) {
+      state.entryRepo.create(
+        deviceId: 'perf',
+        date: DateTime(2024, 1, 1).add(Duration(days: i)),
+        title: '第 $i 篇',
+        body: '第 $i 篇的正文内容',
+      );
+    }
+    db.raw.execute('COMMIT');
+    await state.refresh();
+
+    final watch = Stopwatch()..start();
+    await pumpApp(tester);
+    watch.stop();
+
+    final tiles = find.byType(EntryListTile).evaluate().length;
+    debugPrint(
+      'LIST1000 firstFrame=${watch.elapsedMilliseconds}ms tiles=$tiles entries=${state.entries.length}',
+    );
+
+    expect(state.entries.length, 1000);
+    expect(tiles, greaterThan(0));
+    // 惰性构建：不应把 1000 条全建出来（视口 + cacheExtent 内通常十几到几十条）
+    expect(tiles, lessThan(60), reason: '列表应惰性构建，而不是一次渲染全部 1000 条');
   }, skip: skipWidgetTests);
 }
 
