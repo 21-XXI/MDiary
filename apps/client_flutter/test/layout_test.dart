@@ -125,6 +125,33 @@ void main() {
       );
     }
   }, skip: skip);
+
+  testWidgets('超长标题（500 字）与超长单词不撑破布局', (tester) async {
+    await pumpAt(tester, const Size(800, 600));
+
+    final longTitle = '超长标题' * 125; // 500 字
+    final longWord = 'A' * 300; // 无空格长单词，Text 断行压力更大
+    await tester.tap(find.widgetWithText(FilledButton, '新建日记').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('editor-title')), longTitle);
+    await tester.enterText(
+      find.byKey(const Key('editor-body')),
+      '$longWord\n\n正文',
+    );
+    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull, reason: '编辑态不应溢出');
+
+    // 列表里的标题应单行省略，不换行撑高
+    expect(find.textContaining('超长标题'), findsWidgets);
+
+    for (final mode in <String>['分栏', '预览']) {
+      await tester.tap(find.text(mode));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: '$mode 下超长内容不应溢出');
+    }
+  }, skip: skip);
 }
 
 String? _locateSqlite3() {

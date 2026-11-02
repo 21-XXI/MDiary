@@ -9,9 +9,9 @@
 | # | 项 | 命令 / 操作 | 期望 | 状态 |
 |---|---|---|---|---|
 | A1 | 静态分析 | `flutter analyze` | 0 error / 0 warning / 0 info | **PASS**（2026-11-02 自动验证，0 issue） |
-| A2 | 单元测试 | `flutter test` | 全部通过 | **PASS**（2026-11-02 自动验证，93 passed：纯逻辑 27 + SQLite 集成 42（持久化 4、搜索边界 12、导入导出边界 10、保存状态机 4）+ 应用界面 12 + Markdown 视图 5 + 日志 3 + 性能 1 + 布局 4） |
+| A2 | 单元测试 | `flutter test` | 全部通过 | **PASS**（2026-11-02 自动验证，101 passed：纯逻辑 27 + SQLite 集成 49（持久化 4、搜索边界 12、导入导出边界 10、保存状态机 4、交叉状态 7）+ 应用界面 12 + Markdown 视图 5 + 日志 3 + 性能 1 + 布局 5） |
 | A3 | Release 构建 | `scripts\build.ps1` | 产出 `mdiary.exe` | **PASS**（2026-11-02 自动验证，Release 目录 21.8 MB；打包后独立启动建库通过） |
-| A4 | 提交审查 | `git log` | 每条 commit 含改动/原因/风险/验证/回滚 | **PASS**（22 次提交均按 `.gitmessage` 模板，审查记录在 `docs/reviews/`） |
+| A4 | 提交审查 | `git log` | 每条 commit 含改动/原因/风险/验证/回滚 | **PASS**（23 次提交均按 `.gitmessage` 模板，审查记录在 `docs/reviews/`） |
 
 ## B. 目标 1：书写并保存为 .md
 
