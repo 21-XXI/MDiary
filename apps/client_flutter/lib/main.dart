@@ -30,7 +30,11 @@ Future<void> main() async {
       attachmentRepo: attachmentRepo,
       metaRepo: metaRepo,
       store: store,
-      markdownIo: MarkdownIo(entries: entryRepo, attachments: attachmentRepo, store: store),
+      markdownIo: MarkdownIo(
+        entries: entryRepo,
+        attachments: attachmentRepo,
+        store: store,
+      ),
     );
     await state.bootstrap();
     runApp(MDiaryApp(state: state));
@@ -51,14 +55,20 @@ class _StartupFailureApp extends StatelessWidget {
     final dataPath = Platform.environment['APPDATA'] ?? '';
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: const Color(0xFF4C6A92), useMaterial3: true),
+      theme: ThemeData(
+        colorSchemeSeed: const Color(0xFF4C6A92),
+        useMaterial3: true,
+      ),
       home: Scaffold(
         body: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              const Text('MDiary 启动失败', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              const Text(
+                'MDiary 启动失败',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 12),
               SelectableText('原因：$message'),
               const SizedBox(height: 8),
@@ -66,7 +76,10 @@ class _StartupFailureApp extends StatelessWidget {
               const SizedBox(height: 12),
               const Text('可尝试：确认该目录可写、数据库文件未被其他程序占用（例如同时开了两个实例），再重新启动。'),
               const SizedBox(height: 16),
-              const Text('技术详情：', style: TextStyle(fontWeight: FontWeight.w600)),
+              const Text(
+                '技术详情：',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
               const SizedBox(height: 4),
               Expanded(
                 child: Container(
@@ -76,7 +89,12 @@ class _StartupFailureApp extends StatelessWidget {
                     color: const Color(0xFFF2F2F2),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: SingleChildScrollView(child: SelectableText(details, style: const TextStyle(fontSize: 12))),
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      details,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
                 ),
               ),
             ],

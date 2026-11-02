@@ -20,20 +20,28 @@ class EntryRepository {
     final kw = keyword.trim();
     if (kw.isNotEmpty) {
       final pattern = '%${_escapeLike(kw)}%';
-      sql.write(" AND (title LIKE ? ESCAPE '\\' OR body_md LIKE ? ESCAPE '\\')");
+      sql.write(
+        " AND (title LIKE ? ESCAPE '\\' OR body_md LIKE ? ESCAPE '\\')",
+      );
       params
         ..add(pattern)
         ..add(pattern);
     }
-    sql.write(deleted
-        ? ' ORDER BY deleted_at DESC'
-        : ' ORDER BY pinned DESC, entry_date DESC, updated_at DESC');
+    sql.write(
+      deleted
+          ? ' ORDER BY deleted_at DESC'
+          : ' ORDER BY pinned DESC, entry_date DESC, updated_at DESC',
+    );
     final rows = _raw.select(sql.toString(), params);
-    return rows.map((row) => Entry.fromMap(Map<String, Object?>.from(row))).toList();
+    return rows
+        .map((row) => Entry.fromMap(Map<String, Object?>.from(row)))
+        .toList();
   }
 
   Entry? findById(String id) {
-    final rows = _raw.select('SELECT * FROM entries WHERE id = ?', <Object?>[id]);
+    final rows = _raw.select('SELECT * FROM entries WHERE id = ?', <Object?>[
+      id,
+    ]);
     if (rows.isEmpty) return null;
     return Entry.fromMap(Map<String, Object?>.from(rows.first));
   }
@@ -109,12 +117,18 @@ class EntryRepository {
   void softDelete(String id) {
     _raw.execute(
       'UPDATE entries SET deleted_at = ?, updated_at = ? WHERE id = ?',
-      <Object?>[DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch, id],
+      <Object?>[
+        DateTime.now().millisecondsSinceEpoch,
+        DateTime.now().millisecondsSinceEpoch,
+        id,
+      ],
     );
   }
 
   void restore(String id) {
-    _raw.execute('UPDATE entries SET deleted_at = NULL WHERE id = ?', <Object?>[id]);
+    _raw.execute('UPDATE entries SET deleted_at = NULL WHERE id = ?', <Object?>[
+      id,
+    ]);
   }
 
   /// 物理删除（回收站彻底删除时调用）。

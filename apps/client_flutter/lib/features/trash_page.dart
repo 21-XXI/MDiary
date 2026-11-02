@@ -48,11 +48,17 @@ class _TrashPageState extends State<TrashPage> {
               separatorBuilder: (context, index) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final entry = _entries[index];
-                final title = entry.title.trim().isEmpty ? deriveTitleFromBody(entry.bodyMd) : entry.title;
+                final title = entry.title.trim().isEmpty
+                    ? deriveTitleFromBody(entry.bodyMd)
+                    : entry.title;
                 final attachmentCount = state.attachmentCountOf(entry.id);
                 final deletedAt = entry.deletedAt;
                 return ListTile(
-                  title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  title: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   subtitle: Text(
                     '删除于 ${deletedAt == null ? '-' : formatDateTime(deletedAt)}'
                     '${attachmentCount > 0 ? ' · $attachmentCount 个附件' : ''}',
@@ -71,7 +77,9 @@ class _TrashPageState extends State<TrashPage> {
                       ),
                       const SizedBox(width: 4),
                       TextButton.icon(
-                        style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
+                        style: TextButton.styleFrom(
+                          foregroundColor: theme.colorScheme.error,
+                        ),
                         onPressed: () => _confirmPurge(entry, title),
                         icon: const Icon(Icons.delete_forever, size: 16),
                         label: const Text('彻底删除'),
@@ -91,9 +99,14 @@ class _TrashPageState extends State<TrashPage> {
         title: const Text('彻底删除？'),
         content: Text('「$title」及其附件将被永久删除，无法恢复。'),
         actions: <Widget>[
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('永久删除'),
           ),

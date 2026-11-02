@@ -4,7 +4,8 @@ import 'package:mdiary/data/markdown_document.dart';
 void main() {
   group('front matter 解析', () {
     test('标准 front matter 被解析为 meta + body', () {
-      const content = '---\n'
+      const content =
+          '---\n'
           'title: 杭州三日\n'
           'date: 2026-03-14\n'
           'tags: [旅行, 杭州]\n'
@@ -33,7 +34,9 @@ void main() {
     });
 
     test('BOM 与 CRLF 会被规范化', () {
-      final doc = parseMarkdownDocument('\uFEFF---\r\ntitle: t\r\n---\r\n正文\r\n');
+      final doc = parseMarkdownDocument(
+        '\uFEFF---\r\ntitle: t\r\n---\r\n正文\r\n',
+      );
       expect(doc.title, 't');
       expect(doc.body.contains('\r'), isFalse);
     });
@@ -60,7 +63,11 @@ void main() {
     });
 
     test('标题含冒号时加引号且可还原', () {
-      final text = buildMarkdownDocument(title: 'A: B', date: DateTime(2026, 1, 2), body: '正文');
+      final text = buildMarkdownDocument(
+        title: 'A: B',
+        date: DateTime(2026, 1, 2),
+        body: '正文',
+      );
       final doc = parseMarkdownDocument(text);
       expect(doc.title, 'A: B');
     });
@@ -92,19 +99,26 @@ void main() {
   group('引用改写', () {
     test('本地引用被改写为 assets/<hash>', () {
       final body = '![图](./images/pic.png) 以及 [文件](docs/a.pdf)';
-      final rewritten = rewriteLocalReferences(body, (ref) => ref.endsWith('.png') ? 'abc123' : null);
+      final rewritten = rewriteLocalReferences(
+        body,
+        (ref) => ref.endsWith('.png') ? 'abc123' : null,
+      );
       expect(rewritten.contains('![图](assets/abc123)'), isTrue);
       expect(rewritten.contains('[文件](docs/a.pdf)'), isTrue);
     });
 
     test('网络引用保持原样', () {
       final body = '![x](https://example.com/a.png)';
-      final rewritten = rewriteLocalReferences(body, (ref) => 'should-not-be-used');
+      final rewritten = rewriteLocalReferences(
+        body,
+        (ref) => 'should-not-be-used',
+      );
       expect(rewritten, body);
     });
 
     test('提取本地引用会忽略 http/data', () {
-      final body = '![a](assets/1.png) ![b](https://x/y.png) ![c](data:image/png;base64,AA)';
+      final body =
+          '![a](assets/1.png) ![b](https://x/y.png) ![c](data:image/png;base64,AA)';
       final refs = extractLocalReferences(body);
       expect(refs, <String>{'assets/1.png'});
     });

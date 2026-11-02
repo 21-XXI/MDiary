@@ -21,10 +21,19 @@ class AppPaths {
     if (override != null && override.trim().isNotEmpty) {
       base = override;
     } else if (Platform.isWindows) {
-      base = Platform.environment['APPDATA'] ??
-          p.join(Platform.environment['USERPROFILE'] ?? '.', 'AppData', 'Roaming');
+      base =
+          Platform.environment['APPDATA'] ??
+          p.join(
+            Platform.environment['USERPROFILE'] ?? '.',
+            'AppData',
+            'Roaming',
+          );
     } else if (Platform.isMacOS) {
-      base = p.join(Platform.environment['HOME'] ?? '.', 'Library', 'Application Support');
+      base = p.join(
+        Platform.environment['HOME'] ?? '.',
+        'Library',
+        'Application Support',
+      );
     } else {
       final xdg = Platform.environment['XDG_DATA_HOME'];
       base = (xdg != null && xdg.isNotEmpty)

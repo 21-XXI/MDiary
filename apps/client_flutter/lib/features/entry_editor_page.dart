@@ -22,10 +22,12 @@ class EntryEditorPage extends StatefulWidget {
 }
 
 class _EntryEditorPageState extends State<EntryEditorPage> {
-  late final TextEditingController _titleController =
-      TextEditingController(text: widget.entry.title);
-  late final TextEditingController _bodyController =
-      TextEditingController(text: widget.entry.bodyMd);
+  late final TextEditingController _titleController = TextEditingController(
+    text: widget.entry.title,
+  );
+  late final TextEditingController _bodyController = TextEditingController(
+    text: widget.entry.bodyMd,
+  );
   final FocusNode _bodyFocus = FocusNode();
 
   EditorMode _mode = EditorMode.edit;
@@ -114,8 +116,14 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
         title: const Text('删除这篇日记？'),
         content: const Text('会移入回收站，可随时恢复；在回收站彻底删除才会移除附件。'),
         actions: <Widget>[
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('移到回收站')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('移到回收站'),
+          ),
         ],
       ),
     );
@@ -128,7 +136,9 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message), duration: const Duration(seconds: 3)));
+      ..showSnackBar(
+        SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
+      );
   }
 
   String? _resolveReference(String reference) {
@@ -175,54 +185,76 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
   Widget _buildToolbar(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 10, 12, 10),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(20, 10, 12, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Expanded(
-            child: TextField(
-              controller: _titleController,
-              onChanged: _onTitleChanged,
-              textInputAction: TextInputAction.next,
-              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-              decoration: const InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                hintText: '标题（可留空，导出时取正文首行）',
-              ),
+          TextField(
+            controller: _titleController,
+            onChanged: _onTitleChanged,
+            textInputAction: TextInputAction.next,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+            decoration: const InputDecoration(
+              isDense: true,
+              border: InputBorder.none,
+              hintText: '标题（可留空，导出时取正文首行）',
             ),
           ),
-          const SizedBox(width: 8),
-          SegmentedButton<EditorMode>(
-            showSelectedIcon: false,
-            style: const ButtonStyle(visualDensity: VisualDensity.compact),
-            segments: const <ButtonSegment<EditorMode>>[
-              ButtonSegment<EditorMode>(value: EditorMode.edit, icon: Icon(Icons.edit_note, size: 18), label: Text('编辑')),
-              ButtonSegment<EditorMode>(value: EditorMode.split, icon: Icon(Icons.vertical_split_outlined, size: 18), label: Text('分栏')),
-              ButtonSegment<EditorMode>(value: EditorMode.preview, icon: Icon(Icons.visibility_outlined, size: 18), label: Text('预览')),
+          const SizedBox(height: 6),
+          Row(
+            children: <Widget>[
+              SegmentedButton<EditorMode>(
+                showSelectedIcon: false,
+                style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                segments: const <ButtonSegment<EditorMode>>[
+                  ButtonSegment<EditorMode>(
+                    value: EditorMode.edit,
+                    icon: Icon(Icons.edit_note, size: 18),
+                    label: Text('编辑'),
+                  ),
+                  ButtonSegment<EditorMode>(
+                    value: EditorMode.split,
+                    icon: Icon(Icons.vertical_split_outlined, size: 18),
+                    label: Text('分栏'),
+                  ),
+                  ButtonSegment<EditorMode>(
+                    value: EditorMode.preview,
+                    icon: Icon(Icons.visibility_outlined, size: 18),
+                    label: Text('预览'),
+                  ),
+                ],
+                selected: <EditorMode>{_mode},
+                onSelectionChanged: (selection) =>
+                    setState(() => _mode = selection.first),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: '插入附件（≤ 25 MB）',
+                onPressed: _busy ? null : _insertAttachment,
+                icon: const Icon(Icons.attach_file),
+              ),
+              IconButton(
+                tooltip: '导出为 .md',
+                onPressed: _export,
+                icon: const Icon(Icons.file_download_outlined),
+              ),
+              IconButton(
+                tooltip: widget.entry.pinned ? '取消置顶' : '置顶',
+                onPressed: () => _state.togglePin(widget.entry),
+                icon: Icon(
+                  widget.entry.pinned
+                      ? Icons.push_pin
+                      : Icons.push_pin_outlined,
+                ),
+              ),
+              IconButton(
+                tooltip: '删除',
+                onPressed: _delete,
+                icon: const Icon(Icons.delete_outline),
+              ),
             ],
-            selected: <EditorMode>{_mode},
-            onSelectionChanged: (selection) => setState(() => _mode = selection.first),
-          ),
-          const SizedBox(width: 4),
-          IconButton(
-            tooltip: '插入附件（≤ 25 MB）',
-            onPressed: _busy ? null : _insertAttachment,
-            icon: const Icon(Icons.attach_file),
-          ),
-          IconButton(
-            tooltip: '导出为 .md',
-            onPressed: _export,
-            icon: const Icon(Icons.file_download_outlined),
-          ),
-          IconButton(
-            tooltip: widget.entry.pinned ? '取消置顶' : '置顶',
-            onPressed: () => _state.togglePin(widget.entry),
-            icon: Icon(widget.entry.pinned ? Icons.push_pin : Icons.push_pin_outlined),
-          ),
-          IconButton(
-            tooltip: '删除',
-            onPressed: _delete,
-            icon: const Icon(Icons.delete_outline),
           ),
         ],
       ),
@@ -235,7 +267,11 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
         return _buildEditor(context);
       case EditorMode.preview:
         return SingleChildScrollView(
-          child: MarkdownView(data: _bodyController.text, resolveLocalPath: _resolveReference, onOpenLink: _onOpenReference),
+          child: MarkdownView(
+            data: _bodyController.text,
+            resolveLocalPath: _resolveReference,
+            onOpenLink: _onOpenReference,
+          ),
         );
       case EditorMode.split:
         return Row(
@@ -269,7 +305,10 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
         expands: true,
         textAlignVertical: TextAlignVertical.top,
         keyboardType: TextInputType.multiline,
-        style: AppTheme.editorStyle(_state.editorFontSize, theme.colorScheme.onSurface),
+        style: AppTheme.editorStyle(
+          _state.editorFontSize,
+          theme.colorScheme.onSurface,
+        ),
         decoration: const InputDecoration(
           border: InputBorder.none,
           isDense: true,
@@ -296,7 +335,9 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
             avatar: Icon(
               missing ? Icons.link_off : Icons.attachment,
               size: 16,
-              color: missing ? theme.colorScheme.error : theme.colorScheme.primary,
+              color: missing
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.primary,
             ),
             label: Text(
               '${attachment.filename}  ${formatBytes(attachment.sizeBytes)}',
@@ -325,12 +366,16 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
         children: <Widget>[
           Text(
             '${formatDayLabel(widget.entry.entryDate)} · $chars 字',
-            style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
           ),
           const Spacer(),
           Text(
             '最后保存 ${formatDateTime(updated)}',
-            style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),

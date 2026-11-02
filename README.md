@@ -33,13 +33,23 @@ cd apps/client_flutter
 flutter pub get
 flutter run -d windows          # 调试运行
 flutter analyze                 # 静态检查
-flutter test                    # 单测
-flutter build windows --release # 打包
+flutter test                    # 单测（含真实 SQLite 集成测试）
 ```
 
-产物：`apps/client_flutter/build/windows/x64/runner/Release/mdiary.exe`。
+打包用仓库根的脚本（见下），不要直接在中文路径下 `flutter build`：
 
-仓库根目录 `scripts/verify.ps1` 一次性跑完 analyze + test + build。
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1          # 增量构建
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Clean   # 清理后全量构建
+```
+
+> **为什么需要脚本**：Flutter 的 Windows 构建链（CMake → MSBuild）会把含中文的工程路径按
+> ANSI(GBK) 转码，出现 `Unable to read file ...\app.dill` 构建失败。脚本在仓库路径含非 ASCII
+> 字符时自动创建 ASCII 目录联接 `C:\mdiary_build` 并从那里构建，仓库位置与 Git 历史不受影响。
+
+产物：`apps/client_flutter/build/windows/x64/runner/Release/mdiary.exe`（整个 `Release` 目录一起分发）。
+
+`scripts/verify.ps1` 一次性跑完 analyze + test + build。
 
 ## 数据位置
 

@@ -6,7 +6,8 @@ import 'app_state.dart';
 ///
 /// 单独成文件，避免 features -> app.dart -> features 的循环依赖。
 class AppScope extends InheritedNotifier<AppState> {
-  const AppScope({super.key, required AppState state, required super.child}) : super(notifier: state);
+  const AppScope({super.key, required AppState state, required super.child})
+    : super(notifier: state);
 
   static AppState of(BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<AppScope>();

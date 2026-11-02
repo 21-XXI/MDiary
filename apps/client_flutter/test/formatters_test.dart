@@ -49,7 +49,10 @@ void main() {
     });
 
     test('昨天带前缀', () {
-      expect(formatRelative(DateTime(2026, 11, 1, 9, 5), now: now), startsWith('昨天'));
+      expect(
+        formatRelative(DateTime(2026, 11, 1, 9, 5), now: now),
+        startsWith('昨天'),
+      );
     });
 
     test('一周内显示天数', () {

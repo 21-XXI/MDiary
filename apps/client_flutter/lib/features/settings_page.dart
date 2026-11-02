@@ -27,12 +27,22 @@ class SettingsPage extends StatelessWidget {
                 child: SegmentedButton<ThemeMode>(
                   showSelectedIcon: false,
                   segments: const <ButtonSegment<ThemeMode>>[
-                    ButtonSegment<ThemeMode>(value: ThemeMode.system, label: Text('跟随系统')),
-                    ButtonSegment<ThemeMode>(value: ThemeMode.light, label: Text('浅色')),
-                    ButtonSegment<ThemeMode>(value: ThemeMode.dark, label: Text('深色')),
+                    ButtonSegment<ThemeMode>(
+                      value: ThemeMode.system,
+                      label: Text('跟随系统'),
+                    ),
+                    ButtonSegment<ThemeMode>(
+                      value: ThemeMode.light,
+                      label: Text('浅色'),
+                    ),
+                    ButtonSegment<ThemeMode>(
+                      value: ThemeMode.dark,
+                      label: Text('深色'),
+                    ),
                   ],
                   selected: <ThemeMode>{state.themeMode},
-                  onSelectionChanged: (selection) => state.setThemeMode(selection.first),
+                  onSelectionChanged: (selection) =>
+                      state.setThemeMode(selection.first),
                 ),
               ),
             ),
@@ -48,7 +58,10 @@ class SettingsPage extends StatelessWidget {
                     children: <Widget>[
                       const Text('编辑器字号'),
                       const Spacer(),
-                      Text('${state.editorFontSize.round()}', style: theme.textTheme.labelLarge),
+                      Text(
+                        '${state.editorFontSize.round()}',
+                        style: theme.textTheme.labelLarge,
+                      ),
                     ],
                   ),
                   Slider(
@@ -61,7 +74,9 @@ class SettingsPage extends StatelessWidget {
                   ),
                   Text(
                     '正文以等宽字体显示，便于对齐 Markdown 结构',
-                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -74,7 +89,10 @@ class SettingsPage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.folder_outlined),
                   title: const Text('数据目录'),
-                  subtitle: SelectableText(AppPaths.root.path, style: theme.textTheme.bodySmall),
+                  subtitle: SelectableText(
+                    AppPaths.root.path,
+                    style: theme.textTheme.bodySmall,
+                  ),
                   trailing: IconButton(
                     tooltip: '在资源管理器中打开',
                     icon: const Icon(Icons.open_in_new),
@@ -85,7 +103,10 @@ class SettingsPage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.image_outlined),
                   title: const Text('附件目录'),
-                  subtitle: SelectableText(state.attachmentsPath, style: theme.textTheme.bodySmall),
+                  subtitle: SelectableText(
+                    state.attachmentsPath,
+                    style: theme.textTheme.bodySmall,
+                  ),
                   trailing: IconButton(
                     tooltip: '在资源管理器中打开',
                     icon: const Icon(Icons.open_in_new),
@@ -100,7 +121,10 @@ class SettingsPage extends StatelessWidget {
                   onTap: () async {
                     final removed = await state.collectGarbage();
                     if (context.mounted) {
-                      _snack(context, removed == 0 ? '没有可清理的附件' : '已清理 $removed 个附件文件');
+                      _snack(
+                        context,
+                        removed == 0 ? '没有可清理的附件' : '已清理 $removed 个附件文件',
+                      );
                     }
                   },
                 ),
@@ -114,11 +138,16 @@ class SettingsPage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.file_download_outlined),
                   title: const Text('整库导出'),
-                  subtitle: const Text('每篇一个 .md，附件放入 assets/，可直接用 Typora / VS Code 打开'),
+                  subtitle: const Text(
+                    '每篇一个 .md，附件放入 assets/，可直接用 Typora / VS Code 打开',
+                  ),
                   onTap: () async {
                     final result = await state.exportLibrary();
                     if (result != null && context.mounted) {
-                      _snack(context, '已导出 ${result.entries} 篇日记到 ${result.directory}');
+                      _snack(
+                        context,
+                        '已导出 ${result.entries} 篇日记到 ${result.directory}',
+                      );
                     }
                   },
                 ),
@@ -130,8 +159,13 @@ class SettingsPage extends StatelessWidget {
                   onTap: () async {
                     final result = await state.importLibrary();
                     if (result == null || !context.mounted) return;
-                    final errors = result.errors.isEmpty ? '' : '，${result.errors.length} 个文件失败';
-                    _snack(context, '导入 ${result.imported} 篇，跳过重复 ${result.skipped} 篇$errors');
+                    final errors = result.errors.isEmpty
+                        ? ''
+                        : '，${result.errors.length} 个文件失败';
+                    _snack(
+                      context,
+                      '导入 ${result.imported} 篇，跳过重复 ${result.skipped} 篇$errors',
+                    );
                   },
                 ),
               ],
@@ -141,9 +175,24 @@ class SettingsPage extends StatelessWidget {
           Card(
             child: Column(
               children: const <Widget>[
-                ListTile(dense: true, leading: Icon(Icons.add), title: Text('新建日记'), trailing: Text('Ctrl + N')),
-                ListTile(dense: true, leading: Icon(Icons.save_outlined), title: Text('立即保存'), trailing: Text('Ctrl + S')),
-                ListTile(dense: true, leading: Icon(Icons.search), title: Text('聚焦搜索'), trailing: Text('Ctrl + F')),
+                ListTile(
+                  dense: true,
+                  leading: Icon(Icons.add),
+                  title: Text('新建日记'),
+                  trailing: Text('Ctrl + N'),
+                ),
+                ListTile(
+                  dense: true,
+                  leading: Icon(Icons.save_outlined),
+                  title: Text('立即保存'),
+                  trailing: Text('Ctrl + S'),
+                ),
+                ListTile(
+                  dense: true,
+                  leading: Icon(Icons.search),
+                  title: Text('聚焦搜索'),
+                  trailing: Text('Ctrl + F'),
+                ),
               ],
             ),
           ),
@@ -167,6 +216,8 @@ class SettingsPage extends StatelessWidget {
   static void _snack(BuildContext context, String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message), duration: const Duration(seconds: 4)));
+      ..showSnackBar(
+        SnackBar(content: Text(message), duration: const Duration(seconds: 4)),
+      );
   }
 }

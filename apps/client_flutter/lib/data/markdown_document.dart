@@ -28,7 +28,10 @@ class MarkdownDocument {
 }
 
 /// 解析 YAML front matter（只支持本程序会写出的扁平 `key: value` 子集）。
-MarkdownDocument parseMarkdownDocument(String content, {String debugName = ''}) {
+MarkdownDocument parseMarkdownDocument(
+  String content, {
+  String debugName = '',
+}) {
   var text = content;
   if (text.startsWith('\uFEFF')) {
     text = text.substring(1);
@@ -63,7 +66,10 @@ MarkdownDocument parseMarkdownDocument(String content, {String debugName = ''}) 
     if (key.isNotEmpty) meta[key] = value;
   }
   final body = lines.sublist(endIndex + 1).join('\n');
-  return MarkdownDocument(meta: meta, body: body.replaceFirst(RegExp(r'^\n'), ''));
+  return MarkdownDocument(
+    meta: meta,
+    body: body.replaceFirst(RegExp(r'^\n'), ''),
+  );
 }
 
 DateTime? parseDate(String? raw) {
@@ -72,14 +78,17 @@ DateTime? parseDate(String? raw) {
   if (trimmed.isEmpty) return null;
   // 先按纯日期解析并做范围校验：DateTime 会把 2026-13-40 规范化成 2027-02-09，
   // 这种「看起来解析成功」的脏数据必须拒绝。
-  final match = RegExp(r'^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$').firstMatch(trimmed);
+  final match = RegExp(r'^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$')
+      .firstMatch(trimmed);
   if (match != null) {
     final year = int.parse(match.group(1)!);
     final month = int.parse(match.group(2)!);
     final day = int.parse(match.group(3)!);
     if (month < 1 || month > 12 || day < 1 || day > 31) return null;
     final date = DateTime(year, month, day);
-    if (date.year != year || date.month != month || date.day != day) return null;
+    if (date.year != year || date.month != month || date.day != day) {
+      return null;
+    }
     return date;
   }
   final iso = DateTime.tryParse(trimmed);
@@ -87,7 +96,8 @@ DateTime? parseDate(String? raw) {
   // 带时间的 ISO 串同样校验月/日是否被规范化
   final head = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(trimmed);
   if (head != null) {
-    if (iso.month != int.parse(head.group(2)!) || iso.day != int.parse(head.group(3)!)) {
+    if (iso.month != int.parse(head.group(2)!) ||
+        iso.day != int.parse(head.group(3)!)) {
       return null;
     }
   }
@@ -105,9 +115,11 @@ String buildMarkdownDocument({
   final buffer = StringBuffer()
     ..writeln('---')
     ..writeln('title: ${_quote(title)}')
-    ..writeln('date: ${date.year.toString().padLeft(4, '0')}-'
-        '${date.month.toString().padLeft(2, '0')}-'
-        '${date.day.toString().padLeft(2, '0')}');
+    ..writeln(
+      'date: ${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}',
+    );
   if (tags.isNotEmpty) {
     buffer.writeln('tags: [${tags.join(', ')}]');
   }
@@ -120,14 +132,16 @@ String buildMarkdownDocument({
 }
 
 String _quote(String value) {
-  final needsQuote = value.contains(':') || value.contains('#') || value.startsWith(' ');
+  final needsQuote =
+      value.contains(':') || value.contains('#') || value.startsWith(' ');
   if (!needsQuote) return value;
   return '"${value.replaceAll('"', '\\"')}"';
 }
 
 /// 导出文件名：`2026-11-02-标题.md`，去掉 Windows 非法字符。
 String safeFileName(DateTime date, String title, {String suffix = ''}) {
-  final datePart = '${date.year.toString().padLeft(4, '0')}-'
+  final datePart =
+      '${date.year.toString().padLeft(4, '0')}-'
       '${date.month.toString().padLeft(2, '0')}-'
       '${date.day.toString().padLeft(2, '0')}';
   var clean = title
@@ -142,8 +156,9 @@ String safeFileName(DateTime date, String title, {String suffix = ''}) {
 }
 
 /// 正文中的图片/链接引用正则（`![](path)`，允许 title）。
-final RegExp markdownLinkPattern =
-    RegExp(r'(!?)\[([^\]]*)\]\(\s*([^)\s]+)(\s+"[^"]*")?\s*\)');
+final RegExp markdownLinkPattern = RegExp(
+  r'(!?)\[([^\]]*)\]\(\s*([^)\s]+)(\s+"[^"]*")?\s*\)',
+);
 
 bool isRemoteReference(String ref) {
   final lower = ref.toLowerCase();
@@ -156,7 +171,10 @@ bool isRemoteReference(String ref) {
 
 /// 把正文里指向本地文件的相对引用改写为 `assets/<hash><ext>`。
 /// [resolver] 返回新的相对引用；返回 null 表示保持原样。
-String rewriteLocalReferences(String body, String? Function(String rawRef) resolver) {
+String rewriteLocalReferences(
+  String body,
+  String? Function(String rawRef) resolver,
+) {
   return body.replaceAllMapped(markdownLinkPattern, (match) {
     final raw = match.group(3)!;
     if (isRemoteReference(raw)) return match.group(0)!;

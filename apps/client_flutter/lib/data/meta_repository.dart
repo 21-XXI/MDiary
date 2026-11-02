@@ -11,7 +11,10 @@ class MetaRepository {
   Database get _raw => _db.raw;
 
   String? get(String key) {
-    final rows = _raw.select('SELECT value FROM app_meta WHERE key = ?', <Object?>[key]);
+    final rows = _raw.select(
+      'SELECT value FROM app_meta WHERE key = ?',
+      <Object?>[key],
+    );
     if (rows.isEmpty) return null;
     return rows.first['value'] as String?;
   }

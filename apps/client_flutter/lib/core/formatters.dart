@@ -1,7 +1,15 @@
 /// 轻量格式化工具：不引入 intl，避免额外依赖与本地化数据加载。
 library;
 
-const List<String> _weekdays = <String>['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+const List<String> _weekdays = <String>[
+  '周一',
+  '周二',
+  '周三',
+  '周四',
+  '周五',
+  '周六',
+  '周日',
+];
 
 String _two(int v) => v.toString().padLeft(2, '0');
 

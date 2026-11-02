@@ -27,10 +27,14 @@ class EntryListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final title = entry.title.trim().isEmpty ? deriveTitleFromBody(entry.bodyMd) : entry.title.trim();
+    final title = entry.title.trim().isEmpty
+        ? deriveTitleFromBody(entry.bodyMd)
+        : entry.title.trim();
     final preview = _previewOf(entry.bodyMd);
     return Material(
-      color: selected ? scheme.primaryContainer.withValues(alpha: 0.55) : Colors.transparent,
+      color: selected
+          ? scheme.primaryContainer.withValues(alpha: 0.55)
+          : Colors.transparent,
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -43,7 +47,11 @@ class EntryListTile extends StatelessWidget {
                   if (entry.pinned)
                     Padding(
                       padding: const EdgeInsets.only(right: 4),
-                      child: Icon(Icons.push_pin, size: 13, color: scheme.primary),
+                      child: Icon(
+                        Icons.push_pin,
+                        size: 13,
+                        color: scheme.primary,
+                      ),
                     ),
                   Expanded(
                     child: Text(
@@ -51,7 +59,9 @@ class EntryListTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                        fontWeight: selected
+                            ? FontWeight.w700
+                            : FontWeight.w600,
                       ),
                     ),
                   ),
@@ -60,14 +70,24 @@ class EntryListTile extends StatelessWidget {
                       padding: const EdgeInsets.only(left: 6),
                       child: Row(
                         children: <Widget>[
-                          Icon(Icons.attach_file, size: 12, color: theme.colorScheme.onSurfaceVariant),
-                          Text('$attachmentCount', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                          Icon(
+                            Icons.attach_file,
+                            size: 12,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          Text(
+                            '$attachmentCount',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   if (onMenu != null)
                     GestureDetector(
-                      onSecondaryTapDown: (details) => onMenu!(details.globalPosition),
+                      onSecondaryTapDown: (details) =>
+                          onMenu!(details.globalPosition),
                       child: const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 4),
                         child: Icon(Icons.more_horiz, size: 16),
@@ -80,14 +100,27 @@ class EntryListTile extends StatelessWidget {
                 preview.isEmpty ? '（空白）' : preview,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant, height: 1.4),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  height: 1.4,
+                ),
               ),
               const SizedBox(height: 4),
               Row(
                 children: <Widget>[
-                  Text(formatRelative(entry.updatedAt), style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                  Text(
+                    formatRelative(entry.updatedAt),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                   const Spacer(),
-                  Text(formatDate(entry.entryDate), style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                  Text(
+                    formatDate(entry.entryDate),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -118,11 +151,31 @@ class SaveIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final (IconData icon, String label, Color color) = switch (status) {
-      SaveStatus.idle => (Icons.circle_outlined, '就绪', theme.colorScheme.onSurfaceVariant),
-      SaveStatus.dirty => (Icons.edit_outlined, '编辑中…', theme.colorScheme.onSurfaceVariant),
-      SaveStatus.saving => (Icons.cloud_upload_outlined, '保存中…', theme.colorScheme.onSurfaceVariant),
-      SaveStatus.saved => (Icons.check_circle_outline, '已保存', Colors.green.shade600),
-      SaveStatus.error => (Icons.error_outline, '保存失败', theme.colorScheme.error),
+      SaveStatus.idle => (
+        Icons.circle_outlined,
+        '就绪',
+        theme.colorScheme.onSurfaceVariant,
+      ),
+      SaveStatus.dirty => (
+        Icons.edit_outlined,
+        '编辑中…',
+        theme.colorScheme.onSurfaceVariant,
+      ),
+      SaveStatus.saving => (
+        Icons.cloud_upload_outlined,
+        '保存中…',
+        theme.colorScheme.onSurfaceVariant,
+      ),
+      SaveStatus.saved => (
+        Icons.check_circle_outline,
+        '已保存',
+        Colors.green.shade600,
+      ),
+      SaveStatus.error => (
+        Icons.error_outline,
+        '保存失败',
+        theme.colorScheme.error,
+      ),
     };
     return Tooltip(
       message: status == SaveStatus.error ? (error ?? '保存失败') : label,
@@ -131,7 +184,10 @@ class SaveIndicator extends StatelessWidget {
         children: <Widget>[
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 4),
-          Text(label, style: theme.textTheme.labelSmall?.copyWith(color: color)),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(color: color),
+          ),
         ],
       ),
     );
@@ -159,7 +215,11 @@ class EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(icon, size: 48, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
+          Icon(
+            icon,
+            size: 48,
+            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+          ),
           const SizedBox(height: 12),
           Text(title, style: theme.textTheme.titleMedium),
           if (description != null) ...<Widget>[
@@ -167,7 +227,9 @@ class EmptyState extends StatelessWidget {
             Text(
               description!,
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
           if (action != null) ...<Widget>[const SizedBox(height: 16), action!],

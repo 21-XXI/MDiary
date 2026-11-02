@@ -26,7 +26,12 @@ class MarkdownView extends StatelessWidget {
     final theme = Theme.of(context);
     if (data.trim().isEmpty) {
       return Center(
-        child: Text('还没有内容', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        child: Text(
+          '还没有内容',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
       );
     }
     return Padding(
@@ -35,25 +40,30 @@ class MarkdownView extends StatelessWidget {
         data: data,
         selectable: true,
         styleSheet: _buildStyleSheet(context),
-      imageBuilder: (uri, title, alt) {
-        final reference = uri.toString();
-        final path = resolveLocalPath(reference);
-        if (path == null) return _MissingAttachment(label: alt?.isNotEmpty == true ? alt! : reference);
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: Image.file(
-              File(path),
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stack) => _MissingAttachment(label: reference),
+        imageBuilder: (uri, title, alt) {
+          final reference = uri.toString();
+          final path = resolveLocalPath(reference);
+          if (path == null) {
+            return _MissingAttachment(
+              label: alt?.isNotEmpty == true ? alt! : reference,
+            );
+          }
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.file(
+                File(path),
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stack) =>
+                    _MissingAttachment(label: reference),
+              ),
             ),
-          ),
-        );
-      },
-      onTapLink: (text, href, title) {
-        if (href != null && onOpenLink != null) onOpenLink!(href);
-      },
+          );
+        },
+        onTapLink: (text, href, title) {
+          if (href != null && onOpenLink != null) onOpenLink!(href);
+        },
       ),
     );
   }
@@ -64,9 +74,18 @@ class MarkdownView extends StatelessWidget {
     final base = MarkdownStyleSheet.fromTheme(theme);
     return base.copyWith(
       p: theme.textTheme.bodyLarge?.copyWith(height: 1.75, fontSize: 15.5),
-      h1: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700, height: 1.5),
-      h2: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700, height: 1.5),
-      h3: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600, height: 1.5),
+      h1: theme.textTheme.headlineSmall?.copyWith(
+        fontWeight: FontWeight.w700,
+        height: 1.5,
+      ),
+      h2: theme.textTheme.titleLarge?.copyWith(
+        fontWeight: FontWeight.w700,
+        height: 1.5,
+      ),
+      h3: theme.textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w600,
+        height: 1.5,
+      ),
       blockquote: theme.textTheme.bodyMedium?.copyWith(
         color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.75),
         height: 1.7,
@@ -90,7 +109,10 @@ class MarkdownView extends StatelessWidget {
       codeblockPadding: const EdgeInsets.all(12),
       listBullet: theme.textTheme.bodyLarge,
       tableBorder: TableBorder.all(color: scheme.outlineVariant, width: 1),
-      tableCellsPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      tableCellsPadding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 6,
+      ),
       horizontalRuleDecoration: BoxDecoration(
         border: Border(top: BorderSide(color: scheme.outlineVariant, width: 1)),
       ),
@@ -117,12 +139,18 @@ class _MissingAttachment extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(Icons.broken_image_outlined, size: 18, color: theme.colorScheme.error),
+          Icon(
+            Icons.broken_image_outlined,
+            size: 18,
+            color: theme.colorScheme.error,
+          ),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
               '附件缺失：$label',
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
             ),
           ),
         ],

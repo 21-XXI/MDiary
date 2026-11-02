@@ -55,10 +55,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return Scaffold(
       body: CallbackShortcuts(
         bindings: <ShortcutActivator, VoidCallback>{
-          const SingleActivator(LogicalKeyboardKey.keyN, control: true): () => state.createEntry(),
-          const SingleActivator(LogicalKeyboardKey.keyS, control: true): () => state.flushNow(),
-          const SingleActivator(LogicalKeyboardKey.keyF, control: true): () => _searchFocus.requestFocus(),
-          const SingleActivator(LogicalKeyboardKey.escape): () => _searchFocus.unfocus(),
+          const SingleActivator(LogicalKeyboardKey.keyN, control: true): () =>
+              state.createEntry(),
+          const SingleActivator(LogicalKeyboardKey.keyS, control: true): () =>
+              state.flushNow(),
+          const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
+              _searchFocus.requestFocus(),
+          const SingleActivator(LogicalKeyboardKey.escape): () =>
+              _searchFocus.unfocus(),
         },
         child: Focus(
           autofocus: true,
@@ -99,11 +103,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 onPressed: () => state.createEntry(),
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('新建日记'),
-                style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14)),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                ),
               ),
               const Spacer(),
               IconButton(
-                tooltip: state.trashCount > 0 ? '回收站（${state.trashCount}）' : '回收站',
+                tooltip: state.trashCount > 0
+                    ? '回收站（${state.trashCount}）'
+                    : '回收站',
                 onPressed: () => _openPage(const TrashPage()),
                 icon: Badge(
                   isLabelVisible: state.trashCount > 0,
@@ -141,10 +149,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       },
                       icon: const Icon(Icons.close),
                     ),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
               filled: true,
-              fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
-              contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+              fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.55,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                vertical: 10,
+                horizontal: 8,
+              ),
             ),
           ),
         ],
@@ -199,8 +215,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _showEntryMenu(BuildContext context, AppState state, Entry entry, Offset position) async {
-    final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+  Future<void> _showEntryMenu(
+    BuildContext context,
+    AppState state,
+    Entry entry,
+    Offset position,
+  ) async {
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
     final selected = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -210,7 +232,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         overlay.size.height - position.dy,
       ),
       items: <PopupMenuEntry<String>>[
-        PopupMenuItem<String>(value: 'pin', child: Text(entry.pinned ? '取消置顶' : '置顶')),
+        PopupMenuItem<String>(
+          value: 'pin',
+          child: Text(entry.pinned ? '取消置顶' : '置顶'),
+        ),
         const PopupMenuItem<String>(value: 'export', child: Text('导出为 .md')),
         const PopupMenuDivider(),
         const PopupMenuItem<String>(value: 'delete', child: Text('移到回收站')),
@@ -241,11 +266,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         description: '内容输入后自动保存为 Markdown，可随时导出 .md 文件',
       );
     }
-    return EntryEditorPage(key: ValueKey<String>(selected.id), state: state, entry: selected);
+    return EntryEditorPage(
+      key: ValueKey<String>(selected.id),
+      state: state,
+      entry: selected,
+    );
   }
 
   void _openPage(Widget page) {
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (context) => page));
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (context) => page));
   }
 }
 
@@ -272,19 +302,36 @@ class _StatusBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
-        border: Border(top: BorderSide(color: scheme.outlineVariant, width: 0.6)),
+        border: Border(
+          top: BorderSide(color: scheme.outlineVariant, width: 0.6),
+        ),
       ),
       child: Row(
         children: <Widget>[
-          Text('${state.entries.length} 篇', style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant)),
+          Text(
+            '${state.entries.length} 篇',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
           if (state.query.isNotEmpty) ...<Widget>[
             const SizedBox(width: 10),
-            Text('搜索：${state.query}', style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant)),
+            Text(
+              '搜索：${state.query}',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
           ],
           const Spacer(),
           SaveIndicator(status: state.status, error: state.lastError),
           const SizedBox(width: 14),
-          Text('v1.0.0', style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant)),
+          Text(
+            'v1.0.0',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
         ],
       ),
     );

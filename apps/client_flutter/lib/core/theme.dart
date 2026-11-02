@@ -25,7 +25,10 @@ class AppTheme {
   static ThemeData dark() => _build(Brightness.dark);
 
   static ThemeData _build(Brightness brightness) {
-    final scheme = ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
+    final scheme = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: brightness,
+    );
     final base = ThemeData(
       colorScheme: scheme,
       useMaterial3: true,
@@ -39,7 +42,9 @@ class AppTheme {
         thickness: 1,
         space: 1,
       ),
-      tooltipTheme: const TooltipThemeData(waitDuration: Duration(milliseconds: 400)),
+      tooltipTheme: const TooltipThemeData(
+        waitDuration: Duration(milliseconds: 400),
+      ),
     );
   }
 

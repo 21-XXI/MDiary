@@ -9,7 +9,12 @@ import 'markdown_document.dart';
 import 'models.dart';
 
 class ExportResult {
-  ExportResult({required this.directory, required this.entries, required this.attachments, required this.files});
+  ExportResult({
+    required this.directory,
+    required this.entries,
+    required this.attachments,
+    required this.files,
+  });
 
   final String directory;
   final int entries;
@@ -18,7 +23,11 @@ class ExportResult {
 }
 
 class ImportResult {
-  ImportResult({required this.imported, required this.skipped, required this.errors});
+  ImportResult({
+    required this.imported,
+    required this.skipped,
+    required this.errors,
+  });
 
   final int imported;
   final int skipped;
@@ -68,7 +77,10 @@ class MarkdownIo {
         date: entry.entryDate,
         body: entry.bodyMd,
       );
-      final target = _uniquePath(dir, safeFileName(entry.entryDate, entry.title));
+      final target = _uniquePath(
+        dir,
+        safeFileName(entry.entryDate, entry.title),
+      );
       final file = File(target);
       await file.writeAsString(content, flush: true);
       files.add(file.path);
@@ -101,10 +113,17 @@ class MarkdownIo {
   }
 
   /// 从目录递归导入 `.md`。已存在相同正文 + 同日期的条目会跳过（重复导入不产生副本）。
-  Future<ImportResult> importDirectory(String sourceDir, {required String deviceId}) async {
+  Future<ImportResult> importDirectory(
+    String sourceDir, {
+    required String deviceId,
+  }) async {
     final root = Directory(sourceDir);
     if (!await root.exists()) {
-      return ImportResult(imported: 0, skipped: 0, errors: <String>['目录不存在：$sourceDir']);
+      return ImportResult(
+        imported: 0,
+        skipped: 0,
+        errors: <String>['目录不存在：$sourceDir'],
+      );
     }
     final errors = <String>[];
     var imported = 0;
@@ -140,7 +159,9 @@ class MarkdownIo {
         final storedRefs = <String, StoredBlob>{};
         for (final rawRef in extractLocalReferences(body)) {
           final relative = _decodeRef(rawRef);
-          final candidate = File(p.normalize(p.join(file.parent.path, relative)));
+          final candidate = File(
+            p.normalize(p.join(file.parent.path, relative)),
+          );
           if (!await candidate.exists()) continue;
           try {
             storedRefs[rawRef] = await store.storeFile(candidate.path);
@@ -150,14 +171,11 @@ class MarkdownIo {
         }
 
         if (storedRefs.isNotEmpty) {
-          final rewritten = rewriteLocalReferences(
-            body,
-            (ref) {
-              final blob = storedRefs[ref];
-              if (blob == null) return null;
-              return '${blob.sha256}${blob.ext}';
-            },
-          );
+          final rewritten = rewriteLocalReferences(body, (ref) {
+            final blob = storedRefs[ref];
+            if (blob == null) return null;
+            return '${blob.sha256}${blob.ext}';
+          });
           entries.saveContent(entry.id, body: rewritten);
           final seen = <String>{};
           for (final blob in storedRefs.values) {
@@ -200,13 +218,20 @@ class MarkdownIo {
       final next = File(p.join(dir.path, '$base ($i)$ext'));
       if (!next.existsSync()) return next.path;
     }
-    return p.join(dir.path, '$base-${DateTime.now().millisecondsSinceEpoch}$ext');
+    return p.join(
+      dir.path,
+      '$base-${DateTime.now().millisecondsSinceEpoch}$ext',
+    );
   }
 }
 
 /// 供 UI 展示的附件条目信息（标题、大小、是否存在）。
 class AttachmentSummary {
-  const AttachmentSummary({required this.attachment, required this.localPath, required this.exists});
+  const AttachmentSummary({
+    required this.attachment,
+    required this.localPath,
+    required this.exists,
+  });
 
   final Attachment attachment;
   final String? localPath;

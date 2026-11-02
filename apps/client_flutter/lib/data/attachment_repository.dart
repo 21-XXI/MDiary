@@ -55,14 +55,19 @@ class AttachmentRepository {
 
   /// 每个条目的附件数（列表页角标一次查完，避免按行 N 次查询）。
   Map<String, int> countsByEntry() {
-    final rows = _raw.select('SELECT entry_id, COUNT(*) AS c FROM attachments GROUP BY entry_id');
+    final rows = _raw.select(
+      'SELECT entry_id, COUNT(*) AS c FROM attachments GROUP BY entry_id',
+    );
     return <String, int>{
-      for (final row in rows) row['entry_id']! as String: (row['c'] as int?) ?? 0,
+      for (final row in rows)
+        row['entry_id']! as String: (row['c'] as int?) ?? 0,
     };
   }
 
   void deleteByEntry(String entryId) {
-    _raw.execute('DELETE FROM attachments WHERE entry_id = ?', <Object?>[entryId]);
+    _raw.execute('DELETE FROM attachments WHERE entry_id = ?', <Object?>[
+      entryId,
+    ]);
   }
 
   /// 库中仍被引用的全部附件哈希（GC 依据）。

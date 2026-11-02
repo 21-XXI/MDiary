@@ -37,7 +37,8 @@ class AppDatabase {
   }
 
   void _migrate() {
-    final current = raw.select('PRAGMA user_version').first['user_version'] as int;
+    final current =
+        raw.select('PRAGMA user_version').first['user_version'] as int;
     if (current >= schemaVersion) return;
     raw.execute('BEGIN');
     try {
@@ -65,8 +66,12 @@ class AppDatabase {
         device_id  TEXT NOT NULL DEFAULT ''
       )
     ''');
-    raw.execute('CREATE INDEX IF NOT EXISTS idx_entries_date ON entries(entry_date DESC)');
-    raw.execute('CREATE INDEX IF NOT EXISTS idx_entries_deleted ON entries(deleted_at)');
+    raw.execute(
+      'CREATE INDEX IF NOT EXISTS idx_entries_date ON entries(entry_date DESC)',
+    );
+    raw.execute(
+      'CREATE INDEX IF NOT EXISTS idx_entries_deleted ON entries(deleted_at)',
+    );
 
     raw.execute('''
       CREATE TABLE IF NOT EXISTS attachments (
@@ -79,8 +84,12 @@ class AppDatabase {
         created_at INTEGER NOT NULL
       )
     ''');
-    raw.execute('CREATE INDEX IF NOT EXISTS idx_attachments_entry ON attachments(entry_id)');
-    raw.execute('CREATE INDEX IF NOT EXISTS idx_attachments_sha ON attachments(sha256)');
+    raw.execute(
+      'CREATE INDEX IF NOT EXISTS idx_attachments_entry ON attachments(entry_id)',
+    );
+    raw.execute(
+      'CREATE INDEX IF NOT EXISTS idx_attachments_sha ON attachments(sha256)',
+    );
 
     raw.execute('''
       CREATE TABLE IF NOT EXISTS tags (
@@ -103,5 +112,5 @@ class AppDatabase {
     ''');
   }
 
-  void dispose() => raw.close();
+  void dispose() => raw.dispose();
 }

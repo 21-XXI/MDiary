@@ -19,14 +19,19 @@ enum SaveStatus { idle, dirty, saving, saved, error }
 
 /// 新建附件完成后返回给编辑器插入 Markdown 链接。
 class AttachedFile {
-  const AttachedFile({required this.attachment, required this.blob, required this.isImage});
+  const AttachedFile({
+    required this.attachment,
+    required this.blob,
+    required this.isImage,
+  });
 
   final Attachment attachment;
   final StoredBlob blob;
   final bool isImage;
 
-  String get markdownLink =>
-      isImage ? '![](assets/${blob.sha256}${blob.ext})' : '[${attachment.filename}](assets/${blob.sha256}${blob.ext})';
+  String get markdownLink => isImage
+      ? '![](assets/${blob.sha256}${blob.ext})'
+      : '[${attachment.filename}](assets/${blob.sha256}${blob.ext})';
 }
 
 /// 全局应用状态：唯一的数据入口 + 自动保存调度。
@@ -97,7 +102,8 @@ class AppState extends ChangeNotifier {
       'dark' => ThemeMode.dark,
       _ => ThemeMode.system,
     };
-    _editorFontSize = ((metaRepo.getInt('editor_font_size') ?? 16).toDouble()).clamp(12, 28);
+    _editorFontSize = ((metaRepo.getInt('editor_font_size') ?? 16).toDouble())
+        .clamp(12, 28);
     _loading = false;
     await refresh();
   }
@@ -252,7 +258,8 @@ class AppState extends ChangeNotifier {
 
   int attachmentCountOf(String entryId) => _attachmentCounts[entryId] ?? 0;
 
-  List<Attachment> attachmentsOf(String entryId) => attachmentRepo.listByEntry(entryId);
+  List<Attachment> attachmentsOf(String entryId) =>
+      attachmentRepo.listByEntry(entryId);
 
   String? localPathOf(Attachment attachment) =>
       store.pathFor(attachment.sha256, normalizeExtension(attachment.filename));
@@ -267,7 +274,11 @@ class AppState extends ChangeNotifier {
     return attachBytes(entry, bytes, file.name);
   }
 
-  Future<AttachedFile> attachBytes(Entry entry, Uint8List bytes, String filename) async {
+  Future<AttachedFile> attachBytes(
+    Entry entry,
+    Uint8List bytes,
+    String filename,
+  ) async {
     final blob = await store.storeBytes(bytes, filename);
     final attachment = attachmentRepo.insert(
       entryId: entry.id,
@@ -293,7 +304,12 @@ class AppState extends ChangeNotifier {
   /// 交给系统默认程序打开（附件预览、数据目录）。
   Future<void> openInSystem(String path) async {
     if (Platform.isWindows) {
-      await Process.start('cmd', <String>['/c', 'start', '', path], runInShell: false);
+      await Process.start('cmd', <String>[
+        '/c',
+        'start',
+        '',
+        path,
+      ], runInShell: false);
     } else if (Platform.isMacOS) {
       await Process.start('open', <String>[path]);
     } else {

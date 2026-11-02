@@ -11,7 +11,8 @@ class AttachmentTooLargeException implements Exception {
   final int limitBytes;
 
   @override
-  String toString() => '附件过大：${sizeBytes ~/ (1024 * 1024)} MB，上限 ${limitBytes ~/ (1024 * 1024)} MB';
+  String toString() =>
+      '附件过大：${sizeBytes ~/ (1024 * 1024)} MB，上限 ${limitBytes ~/ (1024 * 1024)} MB';
 }
 
 /// 内容寻址附件库：`<root>/<sha前两位>/<sha><ext>`。
@@ -72,14 +73,19 @@ class AttachmentStore {
 
   /// 命中则返回本地绝对路径（预览与打开附件用）。
   String? pathFor(String sha256, String ext) {
-    final file = File(p.join(directory.path, sha256.substring(0, 2), '$sha256$ext'));
+    final file = File(
+      p.join(directory.path, sha256.substring(0, 2), '$sha256$ext'),
+    );
     return file.existsSync() ? file.path : null;
   }
 
   Future<Set<String>> hashesOnDisk() async {
     final result = <String>{};
     if (!await directory.exists()) return result;
-    await for (final entity in directory.list(recursive: true, followLinks: false)) {
+    await for (final entity in directory.list(
+      recursive: true,
+      followLinks: false,
+    )) {
       if (entity is! File) continue;
       result.add(p.basenameWithoutExtension(entity.path));
     }
@@ -132,14 +138,16 @@ const Map<String, String> _mimeByExtension = <String, String>{
   '.json': 'application/json',
   '.zip': 'application/zip',
   '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.docx':
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   '.mp3': 'audio/mpeg',
   '.mp4': 'video/mp4',
 };
 
 String mimeForFilename(String filename) =>
-    _mimeByExtension[normalizeExtension(filename)] ?? 'application/octet-stream';
+    _mimeByExtension[normalizeExtension(filename)] ??
+    'application/octet-stream';
 
 bool isImageFileName(String filename) {
   final ext = normalizeExtension(filename);
