@@ -142,7 +142,8 @@ class MarkdownIo {
         final stat = await file.stat();
         final content = await file.readAsString();
         final doc = parseMarkdownDocument(content, debugName: file.path);
-        final body = doc.body;
+        // 与导出侧保持一致：尾部空行不影响内容判定，否则「导出再导入」会被当成新条目
+        final body = doc.body.trimRight();
         final date = doc.date ?? stat.modified;
         if (entries.existsSameContent(body, date)) {
           skipped++;
@@ -159,9 +160,11 @@ class MarkdownIo {
         final storedRefs = <String, StoredBlob>{};
         for (final rawRef in extractLocalReferences(body)) {
           final relative = _decodeRef(rawRef);
-          final candidate = File(
-            p.normalize(p.join(file.parent.path, relative)),
-          );
+          final resolved = p.normalize(p.join(file.parent.path, relative));
+          // 只允许导入目录内的文件：`../../x.png`、`C:\Windows\...` 这类目录外引用
+          // 一律不复制（否则「导入一个文件夹」会悄悄读走别处文件）
+          if (!_isInsideImportRoot(root, resolved)) continue;
+          final candidate = File(resolved);
           if (!await candidate.exists()) continue;
           try {
             storedRefs[rawRef] = await store.storeFile(candidate.path);
@@ -207,6 +210,14 @@ class MarkdownIo {
     } on ArgumentError {
       return value;
     }
+  }
+
+  /// 引用是否落在导入目录内。用于拦截 `../../x.png`、绝对路径等目录外读取。
+  static bool _isInsideImportRoot(Directory root, String resolvedPath) {
+    final rootPath = p.normalize(root.absolute.path);
+    final candidate = p.normalize(p.absolute(resolvedPath));
+    if (p.equals(rootPath, candidate)) return true;
+    return p.isWithin(rootPath, candidate);
   }
 
   static String _uniquePath(Directory dir, String fileName) {
