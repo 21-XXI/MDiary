@@ -204,58 +204,72 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
             ),
           ),
           const SizedBox(height: 6),
-          Row(
-            children: <Widget>[
-              SegmentedButton<EditorMode>(
-                showSelectedIcon: false,
-                style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                segments: const <ButtonSegment<EditorMode>>[
-                  ButtonSegment<EditorMode>(
-                    value: EditorMode.edit,
-                    icon: Icon(Icons.edit_note, size: 18),
-                    label: Text('编辑'),
+          // 用 Wrap 而不是 Row：窗口收窄时模式切换与操作按钮自动换行，不会溢出
+          SizedBox(
+            width: double.infinity,
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
+              children: <Widget>[
+                SegmentedButton<EditorMode>(
+                  showSelectedIcon: false,
+                  style: const ButtonStyle(
+                    visualDensity: VisualDensity.compact,
                   ),
-                  ButtonSegment<EditorMode>(
-                    value: EditorMode.split,
-                    icon: Icon(Icons.vertical_split_outlined, size: 18),
-                    label: Text('分栏'),
-                  ),
-                  ButtonSegment<EditorMode>(
-                    value: EditorMode.preview,
-                    icon: Icon(Icons.visibility_outlined, size: 18),
-                    label: Text('预览'),
-                  ),
-                ],
-                selected: <EditorMode>{_mode},
-                onSelectionChanged: (selection) =>
-                    setState(() => _mode = selection.first),
-              ),
-              const SizedBox(width: 4),
-              IconButton(
-                tooltip: '插入附件（≤ 25 MB）',
-                onPressed: _busy ? null : _insertAttachment,
-                icon: const Icon(Icons.attach_file),
-              ),
-              IconButton(
-                tooltip: '导出为 .md',
-                onPressed: _export,
-                icon: const Icon(Icons.file_download_outlined),
-              ),
-              IconButton(
-                tooltip: widget.entry.pinned ? '取消置顶' : '置顶',
-                onPressed: () => _state.togglePin(widget.entry),
-                icon: Icon(
-                  widget.entry.pinned
-                      ? Icons.push_pin
-                      : Icons.push_pin_outlined,
+                  segments: const <ButtonSegment<EditorMode>>[
+                    ButtonSegment<EditorMode>(
+                      value: EditorMode.edit,
+                      icon: Icon(Icons.edit_note, size: 18),
+                      label: Text('编辑'),
+                    ),
+                    ButtonSegment<EditorMode>(
+                      value: EditorMode.split,
+                      icon: Icon(Icons.vertical_split_outlined, size: 18),
+                      label: Text('分栏'),
+                    ),
+                    ButtonSegment<EditorMode>(
+                      value: EditorMode.preview,
+                      icon: Icon(Icons.visibility_outlined, size: 18),
+                      label: Text('预览'),
+                    ),
+                  ],
+                  selected: <EditorMode>{_mode},
+                  onSelectionChanged: (selection) =>
+                      setState(() => _mode = selection.first),
                 ),
-              ),
-              IconButton(
-                tooltip: '删除',
-                onPressed: _delete,
-                icon: const Icon(Icons.delete_outline),
-              ),
-            ],
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    IconButton(
+                      tooltip: '插入附件（≤ 25 MB）',
+                      onPressed: _busy ? null : _insertAttachment,
+                      icon: const Icon(Icons.attach_file),
+                    ),
+                    IconButton(
+                      tooltip: '导出为 .md',
+                      onPressed: _export,
+                      icon: const Icon(Icons.file_download_outlined),
+                    ),
+                    IconButton(
+                      tooltip: widget.entry.pinned ? '取消置顶' : '置顶',
+                      onPressed: () => _state.togglePin(widget.entry),
+                      icon: Icon(
+                        widget.entry.pinned
+                            ? Icons.push_pin
+                            : Icons.push_pin_outlined,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: '删除',
+                      onPressed: _delete,
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -362,24 +376,26 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
     final theme = Theme.of(context);
     final chars = countCharacters(_bodyController.text);
     final updated = widget.entry.updatedAt;
+    final style = theme.textTheme.labelSmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: Row(
-        children: <Widget>[
-          Text(
-            '${formatDayLabel(widget.entry.entryDate)} · $chars 字',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: scheme.onSurfaceVariant,
+      child: SizedBox(
+        width: double.infinity,
+        // 窄窗口下两段文字改为换行排列，避免 Row 溢出
+        child: Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          spacing: 12,
+          runSpacing: 2,
+          children: <Widget>[
+            Text(
+              '${formatDayLabel(widget.entry.entryDate)} · $chars 字',
+              style: style,
             ),
-          ),
-          const Spacer(),
-          Text(
-            '最后保存 ${formatDateTime(updated)}',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-        ],
+            Text('最后保存 ${formatDateTime(updated)}', style: style),
+          ],
+        ),
       ),
     );
   }

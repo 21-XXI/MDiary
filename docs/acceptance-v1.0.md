@@ -1,4 +1,4 @@
-# v1.0 验收清单
+﻿# v1.0 验收清单
 
 对应 `docs/project.md` 第 6 节。执行环境：Windows 10/11 x64，`flutter build windows --release` 产物。
 
@@ -9,9 +9,9 @@
 | # | 项 | 命令 / 操作 | 期望 | 状态 |
 |---|---|---|---|---|
 | A1 | 静态分析 | `flutter analyze` | 0 error / 0 warning / 0 info | **PASS**（2026-11-02 自动验证，0 issue） |
-| A2 | 单元测试 | `flutter test` | 全部通过 | **PASS**（2026-11-02 自动验证，51 passed：纯逻辑 24 + SQLite 集成 12 + 应用界面 8 + Markdown 视图 4 + 日志 3） |
+| A2 | 单元测试 | `flutter test` | 全部通过 | **PASS**（2026-11-02 自动验证，56 passed：纯逻辑 24 + SQLite 集成 12 + 应用界面 8 + Markdown 视图 4 + 日志 3 + 性能 1 + 布局 4） |
 | A3 | Release 构建 | `scripts\build.ps1` | 产出 `mdiary.exe` | **PASS**（2026-11-02 自动验证，Release 目录 21.8 MB；打包后独立启动建库通过） |
-| A4 | 提交审查 | `git log` | 每条 commit 含改动/原因/风险/验证/回滚 | **PASS**（9 次提交均按 `.gitmessage` 模板，审查记录在 `docs/reviews/`） |
+| A4 | 提交审查 | `git log` | 每条 commit 含改动/原因/风险/验证/回滚 | **PASS**（11 次提交均按 `.gitmessage` 模板，审查记录在 `docs/reviews/`） |
 
 ## B. 目标 1：书写并保存为 .md
 
@@ -69,3 +69,5 @@
 | F2 | 只读目录 | 附件目录设为只读后插入 | 提示失败，不崩溃，编辑内容保留 | |
 | F3 | 空草稿 | Ctrl+N 后直接离开 | 不产生空条目 | |
 | F4 | 大库启动 | 1,000 篇重启 | 启动到可用 < 3s | |
+| F5 | 窄窗口布局 | 把窗口拖到 640×520 再拖回 | 无溢出、按钮仍可点 | **PASS**（自动：布局测试覆盖 640×520 / 800×600 / 1024×720 / 1440×900 与动态缩放，见 `test/layout_test.dart`） |
+| F6 | 日志落盘 | 检查 `%APPDATA%\MDiary\logs\error.log` | 发生异常时写入，超 1MB 轮转 | **PASS**（自动：3 个日志用例，见 `test/app_logger_test.dart`） |
