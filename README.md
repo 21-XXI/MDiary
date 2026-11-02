@@ -76,3 +76,11 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Clean   # 清理后�
 
 每次提交必须先 `git diff --staged` 自审，并按 `.gitmessage` 填写审查意见；需要留档的审查记录写入
 `docs/reviews/`。提交历史中每条 commit 都可以独立回滚。
+
+提交后可用脚本核验最近若干条提交是否真的包含五段审查意见：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\check-commits.ps1 -Count 10
+```
+
+（实现上走 `git log --grep`，不用 PowerShell 读 `%B` —— PS 5.1 会按 GBK 解码导致中文匹配失败。）
