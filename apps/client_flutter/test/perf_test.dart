@@ -79,9 +79,21 @@ void main() {
     expect(list.length, 1000);
     expect(hits, isNotEmpty);
     expect(hotHits.length, 1000, reason: '每篇正文都含该关键词');
-    expect(listWatch.elapsedMilliseconds, lessThan(300), reason: '列表首屏 < 300ms（D5）');
-    expect(searchWatch.elapsedMilliseconds, lessThan(500), reason: '搜索 < 500ms（D5）');
-    expect(hotSearchWatch.elapsedMilliseconds, lessThan(500), reason: '正文全表搜索 < 500ms（D5）');
+    expect(
+      listWatch.elapsedMilliseconds,
+      lessThan(300),
+      reason: '列表首屏 < 300ms（D5）',
+    );
+    expect(
+      searchWatch.elapsedMilliseconds,
+      lessThan(500),
+      reason: '搜索 < 500ms（D5）',
+    );
+    expect(
+      hotSearchWatch.elapsedMilliseconds,
+      lessThan(500),
+      reason: '正文全表搜索 < 500ms（D5）',
+    );
   }, skip: skip);
 }
 

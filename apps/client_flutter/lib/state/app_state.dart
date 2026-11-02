@@ -60,8 +60,8 @@ class AppState extends ChangeNotifier {
     SingleFilePicker? filePicker,
     DirectoryPicker? directoryPicker,
     this.dataRootPath = '',
-  })  : _filePicker = filePicker ?? _defaultFilePicker,
-        _directoryPicker = directoryPicker ?? _defaultDirectoryPicker;
+  }) : _filePicker = filePicker ?? _defaultFilePicker,
+       _directoryPicker = directoryPicker ?? _defaultDirectoryPicker;
 
   final AppDatabase db;
   final EntryRepository entryRepo;

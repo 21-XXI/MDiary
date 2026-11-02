@@ -73,15 +73,25 @@ void main() {
     const Size(1024, 720), // 常见笔记本
     const Size(1440, 900), // 桌面
   ]) {
-    testWidgets('${size.width.toInt()}x${size.height.toInt()}：首页与编辑器无溢出', (tester) async {
+    testWidgets('${size.width.toInt()}x${size.height.toInt()}：首页与编辑器无溢出', (
+      tester,
+    ) async {
       await pumpAt(tester, size);
-      expect(tester.takeException(), isNull, reason: '首页在 ${size.width.toInt()} 宽下溢出');
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: '首页在 ${size.width.toInt()} 宽下溢出',
+      );
 
       // 新建并进入编辑器
       final newButton = find.widgetWithText(FilledButton, '新建日记');
       await tester.tap(newButton.first);
       await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull, reason: '编辑器在 ${size.width.toInt()} 宽下溢出');
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: '编辑器在 ${size.width.toInt()} 宽下溢出',
+      );
 
       // 三种视图模式都过一遍
       for (final mode in <String>['分栏', '预览', '编辑']) {

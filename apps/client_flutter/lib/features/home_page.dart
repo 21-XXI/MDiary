@@ -58,7 +58,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         onKeyEvent: _handleKeyEvent,
         child: Row(
           children: <Widget>[
-            SizedBox(width: 332, child: _buildListPane(context, state)),
+            SizedBox(
+              width: _listPaneWidth(context),
+              child: _buildListPane(context, state),
+            ),
             const VerticalDivider(width: 1),
             Expanded(child: _buildContentPane(context, state)),
           ],
@@ -66,6 +69,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       ),
       bottomNavigationBar: _StatusBar(state: state),
     );
+  }
+
+  /// 列表栏宽度：窄窗口下收缩，避免编辑区被挤到不可用（最小 240，最大 360）。
+  double _listPaneWidth(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    return (width * 0.26).clamp(240.0, 360.0);
   }
 
   /// 全局快捷键。用 Focus.onKeyEvent 显式处理，而不是 CallbackShortcuts：

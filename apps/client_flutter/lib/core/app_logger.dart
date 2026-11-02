@@ -27,7 +27,11 @@ class AppLogger {
         ..writeln(error);
       if (stack != null) buffer.writeln(stack);
       buffer.writeln('-' * 60);
-      logFile.writeAsStringSync(buffer.toString(), mode: FileMode.append, flush: true);
+      logFile.writeAsStringSync(
+        buffer.toString(),
+        mode: FileMode.append,
+        flush: true,
+      );
     } catch (_) {
       // 日志本身失败不能影响主流程
     }

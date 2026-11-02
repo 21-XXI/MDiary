@@ -85,11 +85,12 @@ class _StartupFailureApp extends StatelessWidget {
               const SizedBox(height: 8),
               const SelectableText('错误日志：%APPDATA%\\MDiary\\logs\\error.log'),
               const SizedBox(height: 12),
-              const Text(
-                '可尝试：确认该目录可写、数据库文件未被其他程序占用（例如同时开了两个实例），再重新启动。',
-              ),
+              const Text('可尝试：确认该目录可写、数据库文件未被其他程序占用（例如同时开了两个实例），再重新启动。'),
               const SizedBox(height: 16),
-              const Text('技术详情：', style: TextStyle(fontWeight: FontWeight.w600)),
+              const Text(
+                '技术详情：',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
               const SizedBox(height: 4),
               Expanded(
                 child: Container(

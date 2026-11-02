@@ -50,7 +50,11 @@ void main() {
       attachmentRepo: attachmentRepo,
       metaRepo: MetaRepository(db),
       store: store,
-      markdownIo: MarkdownIo(entries: entryRepo, attachments: attachmentRepo, store: store),
+      markdownIo: MarkdownIo(
+        entries: entryRepo,
+        attachments: attachmentRepo,
+        store: store,
+      ),
       filePicker: () async => nextPickedFile,
       directoryPicker: (title) async => nextDirectory,
       dataRootPath: tempDir.path,
@@ -104,7 +108,10 @@ void main() {
     expect(state.entryRepo.count(), 1);
 
     await tester.enterText(find.byKey(const Key('editor-title')), '杭州三日');
-    await tester.enterText(find.byKey(const Key('editor-body')), '# 第一天\n西湖下雨。');
+    await tester.enterText(
+      find.byKey(const Key('editor-body')),
+      '# 第一天\n西湖下雨。',
+    );
     await tester.pump(const Duration(milliseconds: 300));
 
     // 防抖未到时不应写入
@@ -123,7 +130,10 @@ void main() {
   testWidgets('切换预览后渲染 Markdown', (tester) async {
     await pumpApp(tester);
     await createEntry(tester);
-    await tester.enterText(find.byKey(const Key('editor-body')), '**粗体** 与 `代码`');
+    await tester.enterText(
+      find.byKey(const Key('editor-body')),
+      '**粗体** 与 `代码`',
+    );
     await tester.pump(const Duration(milliseconds: 900));
     await tester.pumpAndSettle();
 
@@ -263,7 +273,10 @@ void main() {
     expect(find.byType(SettingsPage), findsOneWidget);
 
     final settingsScrollable = find
-        .descendant(of: find.byType(SettingsPage), matching: find.byType(Scrollable))
+        .descendant(
+          of: find.byType(SettingsPage),
+          matching: find.byType(Scrollable),
+        )
         .first;
     await tester.scrollUntilVisible(
       find.text('整库导出'),
@@ -274,9 +287,8 @@ void main() {
     expect(libDir.listSync().whereType<File>().length, 1);
     // 从目录导入一个外部 .md
     final importDir = Directory('${tempDir.path}/in_dir')..createSync();
-    File('${importDir.path}/外部.md').writeAsStringSync(
-      '---\ntitle: 外部导入\ndate: 2026-05-01\n---\n\n导入的正文',
-    );
+    File('${importDir.path}/外部.md')
+        .writeAsStringSync('---\ntitle: 外部导入\ndate: 2026-05-01\n---\n\n导入的正文');
     nextDirectory = importDir.path;
     await tester.scrollUntilVisible(
       find.text('从目录导入 .md'),
