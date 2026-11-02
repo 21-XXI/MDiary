@@ -34,6 +34,17 @@ class AttachedFile {
       : '[${attachment.filename}](assets/${blob.sha256}${blob.ext})';
 }
 
+/// 一次文件选择的产物（与 file_picker 解耦，便于测试注入）。
+class PickedFile {
+  const PickedFile({required this.name, required this.bytes});
+
+  final String name;
+  final Uint8List bytes;
+}
+
+typedef SingleFilePicker = Future<PickedFile?> Function();
+typedef DirectoryPicker = Future<String?> Function(String title);
+
 /// 全局应用状态：唯一的数据入口 + 自动保存调度。
 ///
 /// 刻意不用状态管理框架：单窗口、单用户，ChangeNotifier + InheritedNotifier
@@ -46,7 +57,11 @@ class AppState extends ChangeNotifier {
     required this.metaRepo,
     required this.store,
     required this.markdownIo,
-  });
+    SingleFilePicker? filePicker,
+    DirectoryPicker? directoryPicker,
+    this.dataRootPath = '',
+  })  : _filePicker = filePicker ?? _defaultFilePicker,
+        _directoryPicker = directoryPicker ?? _defaultDirectoryPicker;
 
   final AppDatabase db;
   final EntryRepository entryRepo;
@@ -54,6 +69,21 @@ class AppState extends ChangeNotifier {
   final MetaRepository metaRepo;
   final AttachmentStore store;
   final MarkdownIo markdownIo;
+
+  final SingleFilePicker _filePicker;
+  final DirectoryPicker _directoryPicker;
+
+  /// 数据根目录（设置页展示/打开用）。由 main 注入，UI 不直接依赖全局 AppPaths。
+  final String dataRootPath;
+
+  static Future<PickedFile?> _defaultFilePicker() async {
+    final file = await FilePicker.pickFile();
+    if (file == null) return null;
+    return PickedFile(name: file.name, bytes: await file.readAsBytes());
+  }
+
+  static Future<String?> _defaultDirectoryPicker(String title) =>
+      FilePicker.getDirectoryPath();
 
   static const Duration autosaveDebounce = Duration(milliseconds: 800);
 
@@ -268,10 +298,9 @@ class AppState extends ChangeNotifier {
 
   /// 弹出系统文件选择框，把文件存入附件库并写库，返回插入用的 Markdown 链接。
   Future<AttachedFile?> pickAttachment(Entry entry) async {
-    final file = await FilePicker.pickFile();
+    final file = await _filePicker();
     if (file == null) return null;
-    final bytes = await file.readAsBytes();
-    return attachBytes(entry, bytes, file.name);
+    return attachBytes(entry, file.bytes, file.name);
   }
 
   Future<AttachedFile> attachBytes(
@@ -320,7 +349,7 @@ class AppState extends ChangeNotifier {
   // ───────────────────────────── 导入 / 导出 ─────────────────────────────
 
   Future<String?> pickDirectory({String title = '选择目录'}) async {
-    return FilePicker.getDirectoryPath();
+    return _directoryPicker(title);
   }
 
   Future<String?> exportCurrent(Entry entry) async {

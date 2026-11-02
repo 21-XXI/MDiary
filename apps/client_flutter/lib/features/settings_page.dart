@@ -1,8 +1,7 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../core/app_paths.dart';
 import '../state/app_scope.dart';
 import '../ui/widgets.dart';
 
@@ -90,13 +89,13 @@ class SettingsPage extends StatelessWidget {
                   leading: const Icon(Icons.folder_outlined),
                   title: const Text('数据目录'),
                   subtitle: SelectableText(
-                    AppPaths.root.path,
+                    state.dataRootPath,
                     style: theme.textTheme.bodySmall,
                   ),
                   trailing: IconButton(
                     tooltip: '在资源管理器中打开',
                     icon: const Icon(Icons.open_in_new),
-                    onPressed: () => state.openInSystem(AppPaths.root.path),
+                    onPressed: () => state.openInSystem(state.dataRootPath),
                   ),
                 ),
                 const Divider(height: 1),

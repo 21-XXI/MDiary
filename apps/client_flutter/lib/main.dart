@@ -35,6 +35,7 @@ Future<void> main() async {
         attachments: attachmentRepo,
         store: store,
       ),
+      dataRootPath: AppPaths.root.path,
     );
     await state.bootstrap();
     runApp(MDiaryApp(state: state));
