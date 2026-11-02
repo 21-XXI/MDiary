@@ -1,0 +1,30 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+.idea/
+.metadata
+
+# Windows ephemeral build artifacts
+apps/client_flutter/windows/flutter/ephemeral/
+
+# Desktop release artifacts
+dist/
+*.exe
+*.msix
+*.zip
+
+# Local data / logs
+*.log
+logs/
+/tmp/
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/settings.json

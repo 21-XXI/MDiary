@@ -1,0 +1,21 @@
+# <type>(<scope>): <一句话改动>
+#
+# type: feat | fix | refactor | chore | docs | test | perf
+# scope: data | ui | editor | attach | export | build | docs
+#
+# ── 改动 ──
+# 本次改了哪些文件/模块，一句话概括行为变化
+#
+# ── 原因 ──
+# 为什么改：对应 project.md 的哪个目标/验收项，或修复什么问题
+#
+# ── 风险 ──
+# 可能影响的功能、数据兼容性、性能；无风险写「无」
+#
+# ── 验证 ──
+# 实际跑过的命令与结果（flutter analyze / flutter test / flutter build windows / 手工点击路径）
+#
+# ── 回滚 ──
+# 出问题时如何回退（git revert <sha> / 手工步骤）
+#
+# 自审 diff：已执行 git diff --staged 并逐行确认（必填，未做不要提交）
