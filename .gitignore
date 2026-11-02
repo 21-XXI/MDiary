@@ -1,4 +1,4 @@
-# Flutter / Dart
+﻿# Flutter / Dart
 .dart_tool/
 .packages
 .pub-cache/
@@ -11,6 +11,8 @@ build/
 
 # 本地命令输出（analyze/test/doctor 临时记录）
 *_out.txt
+*_test.txt
+*_dbg.txt
 doctor.txt
 
 # Windows ephemeral build artifacts

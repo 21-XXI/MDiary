@@ -190,6 +190,7 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           TextField(
+            key: const Key('editor-title'),
             controller: _titleController,
             onChanged: _onTitleChanged,
             textInputAction: TextInputAction.next,
@@ -298,6 +299,7 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
       child: TextField(
+        key: const Key('editor-body'),
         controller: _bodyController,
         focusNode: _bodyFocus,
         onChanged: _onBodyChanged,

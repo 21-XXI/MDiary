@@ -53,30 +53,49 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     return Scaffold(
-      body: CallbackShortcuts(
-        bindings: <ShortcutActivator, VoidCallback>{
-          const SingleActivator(LogicalKeyboardKey.keyN, control: true): () =>
-              state.createEntry(),
-          const SingleActivator(LogicalKeyboardKey.keyS, control: true): () =>
-              state.flushNow(),
-          const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
-              _searchFocus.requestFocus(),
-          const SingleActivator(LogicalKeyboardKey.escape): () =>
-              _searchFocus.unfocus(),
-        },
-        child: Focus(
-          autofocus: true,
-          child: Row(
-            children: <Widget>[
-              SizedBox(width: 332, child: _buildListPane(context, state)),
-              const VerticalDivider(width: 1),
-              Expanded(child: _buildContentPane(context, state)),
-            ],
-          ),
+      body: Focus(
+        autofocus: true,
+        onKeyEvent: _handleKeyEvent,
+        child: Row(
+          children: <Widget>[
+            SizedBox(width: 332, child: _buildListPane(context, state)),
+            const VerticalDivider(width: 1),
+            Expanded(child: _buildContentPane(context, state)),
+          ],
         ),
       ),
       bottomNavigationBar: _StatusBar(state: state),
     );
+  }
+
+  /// 全局快捷键。用 Focus.onKeyEvent 显式处理，而不是 CallbackShortcuts：
+  /// 后者在无头测试与部分桌面场景下收不到组合键（Ctrl+N 不触发）。
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final keyboard = HardwareKeyboard.instance;
+    final key = event.logicalKey;
+    if (keyboard.isControlPressed) {
+      if (key == LogicalKeyboardKey.keyN) {
+        AppScope.of(context).createEntry();
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.keyS) {
+        AppScope.of(context).flushNow();
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.keyF) {
+        _searchFocus.requestFocus();
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
+    if (key == LogicalKeyboardKey.escape) {
+      _searchFocus.unfocus();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   // ───────────────────────────── 左栏 ─────────────────────────────
