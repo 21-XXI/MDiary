@@ -71,7 +71,10 @@ class _StartupFailureApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dataPath = Platform.environment['APPDATA'] ?? '';
+    final exeDir = AppPaths.exeDirectory;
+    final dataPath = exeDir != null
+        ? '$exeDir\\${AppPaths.portableDirName}'
+        : '${Platform.environment['APPDATA'] ?? ''}\\${AppPaths.dataDirName}';
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -91,9 +94,9 @@ class _StartupFailureApp extends StatelessWidget {
               const SizedBox(height: 12),
               SelectableText('原因：$message'),
               const SizedBox(height: 8),
-              SelectableText('数据目录：$dataPath\\MDiary'),
+              SelectableText('数据目录：$dataPath'),
               const SizedBox(height: 8),
-              const SelectableText('错误日志：%APPDATA%\\MDiary\\logs\\error.log'),
+              SelectableText('错误日志：$dataPath\\logs\\error.log'),
               const SizedBox(height: 12),
               const Text('可尝试：确认该目录可写、数据库文件未被其他程序占用（例如同时开了两个实例），再重新启动。'),
               const SizedBox(height: 8),

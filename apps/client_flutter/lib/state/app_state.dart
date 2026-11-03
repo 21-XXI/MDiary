@@ -6,9 +6,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
+import '../core/app_paths.dart';
 import '../core/ids.dart';
 import '../data/attachment_repository.dart';
 import '../data/attachment_store.dart';
+import '../data/data_root_migration.dart';
 import '../data/database.dart';
 import '../data/entry_repository.dart';
 import '../data/markdown_io.dart';
@@ -64,21 +66,21 @@ class AppState extends ChangeNotifier {
   }) : _filePicker = filePicker ?? _defaultFilePicker,
        _directoryPicker = directoryPicker ?? _defaultDirectoryPicker;
 
-  final AppDatabase db;
-  final EntryRepository entryRepo;
-  final AttachmentRepository attachmentRepo;
-  final MetaRepository metaRepo;
-  final AttachmentStore store;
-  final MarkdownIo markdownIo;
+  AppDatabase db;
+  EntryRepository entryRepo;
+  AttachmentRepository attachmentRepo;
+  MetaRepository metaRepo;
+  AttachmentStore store;
+  MarkdownIo markdownIo;
 
   final SingleFilePicker _filePicker;
   final DirectoryPicker _directoryPicker;
 
   /// 数据根目录（设置页展示/打开用）。由 main 注入，UI 不直接依赖全局 AppPaths。
-  final String dataRootPath;
+  String dataRootPath;
 
   /// 默认数据目录不可写、退回备用目录时的说明；正常启动为 null。
-  final String? dataRootNotice;
+  String? dataRootNotice;
 
   static Future<PickedFile?> _defaultFilePicker() async {
     final file = await FilePicker.pickFile();
@@ -360,6 +362,96 @@ class AppState extends ChangeNotifier {
 
   Future<String?> pickDirectory({String title = '选择目录'}) async {
     return _directoryPicker(title);
+  }
+
+  // ───────────────────────────── 数据目录 ─────────────────────────────
+
+  /// 当前数据目录的来源描述（设置页展示用）。
+  String get dataRootSourceLabel => switch (AppPaths.resolution?.source) {
+    DataRootSource.envOverride => '由环境变量 MDIARY_HOME 指定',
+    DataRootSource.userChosen => '自定义目录',
+    DataRootSource.portableDefault => '便携模式（mdiary.exe 同目录）',
+    DataRootSource.appDataFallback => '系统用户目录（exe 目录不可写）',
+    DataRootSource.tempFallback => '系统临时目录（重启后可能被清理）',
+    null => '',
+  };
+
+  /// 把数据迁到 [target] 并切换过去。
+  ///
+  /// 顺序：落盘待保存内容 -> 校验目标 -> 关库 -> 复制并校验 -> 记住新位置 -> 重开 -> 删旧目录。
+  /// 任何一步失败都会回滚到旧目录（旧数据原地不动），并把异常抛给调用方。
+  Future<MigrationResult> changeDataRoot(String target) async {
+    final oldRoot = dataRootPath;
+    final normalized = p.canonicalize(target);
+    if (p.equals(normalized, p.canonicalize(oldRoot))) {
+      throw const DataRootMigrationException('这已经是当前数据目录');
+    }
+
+    await flushNow();
+    _saveDebounce?.cancel();
+    _searchDebounce?.cancel();
+
+    final migration = DataRootMigration(source: oldRoot, target: normalized);
+    await migration.validate();
+
+    // 复制前必须关库：WAL 合并回主库，目标目录只需要一个 mdiary.sqlite。
+    db.checkpoint();
+    db.dispose();
+
+    AppDatabase? reopened;
+    try {
+      final result = await migration.run();
+      reopened = AppDatabase.open(p.join(normalized, DataRootMigration.databaseName));
+      await AppPaths.switchTo(normalized);
+      _rebind(normalized, reopened);
+      reopened = null; // 所有权已交给 state
+      await bootstrap();
+      await DataRootMigration.removeOldRoot(
+        oldRoot,
+        exePath: Platform.resolvedExecutable,
+      );
+      return result;
+    } catch (error) {
+      reopened?.dispose();
+      // 回滚：数据还在旧目录，重新打开旧库；位置指针也尽量改回去。
+      try {
+        await AppPaths.switchTo(oldRoot);
+      } on Object {
+        // 指针写不回去也不能让应用停在这里，内存里先回到旧目录。
+      }
+      _rebind(
+        oldRoot,
+        AppDatabase.open(p.join(oldRoot, DataRootMigration.databaseName)),
+      );
+      await bootstrap();
+      rethrow;
+    }
+  }
+
+  /// 换一套连接/仓库/附件库，并把界面状态复位到「刚打开新库」。
+  void _rebind(String rootPath, AppDatabase database) {
+    db = database;
+    entryRepo = EntryRepository(database);
+    attachmentRepo = AttachmentRepository(database);
+    metaRepo = MetaRepository(database);
+    store = AttachmentStore(Directory(p.join(rootPath, 'attachments')));
+    markdownIo = MarkdownIo(
+      entries: entryRepo,
+      attachments: attachmentRepo,
+      store: store,
+    );
+    dataRootPath = rootPath;
+    dataRootNotice = AppPaths.fallbackReason;
+    _entries.clear();
+    _selected = null;
+    _pendingId = null;
+    _pendingTitle = '';
+    _pendingBody = '';
+    _dirtyDraft = false;
+    _status = SaveStatus.idle;
+    _lastError = null;
+    _trashCount = 0;
+    _attachmentCounts = const <String, int>{};
   }
 
   Future<String?> exportCurrent(Entry entry) async {

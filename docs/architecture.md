@@ -11,8 +11,8 @@ apps/client_flutter/
     main.dart                 入口：初始化数据库、附件库、启动失败兜底页
     app.dart                  MaterialApp + AppScope（InheritedNotifier）
     core/
-      app_paths.dart          应用数据目录（%APPDATA%\MDiary，可用 MDIARY_HOME 覆盖；
-                              默认目录不可写时回退到程序旁 MDiaryData / 临时目录）
+      app_paths.dart          数据目录解析（默认 exe 同目录 MDiaryData；mdiary-location.txt
+                              记住用户改过的位置；MDIARY_HOME 覆盖；不可写时逐级回退）
       theme.dart              主题、字号、编辑器字体
       formatters.dart         日期/字数/字节格式化
       ids.dart                uuid v4 / device_id
@@ -25,6 +25,7 @@ apps/client_flutter/
       attachment_store.dart   内容寻址附件库（sha256）
       markdown_document.dart  front matter 解析/生成、文件名规范化（纯函数，可单测）
       markdown_io.dart        .md 导出/导入（附件搬运）
+      data_root_migration.dart 数据目录迁移：逐文件复制 + 大小校验 + 删旧目录
     state/
       app_state.dart          ChangeNotifier：列表、选中、自动保存调度
     features/
@@ -97,7 +98,7 @@ v2.0 同步时按 hash 上传即可幂等。代价是「文件已写、记录未
 
 ### 3.3 附件
 1. `file_picker` 选择文件 → 读字节 → sha256；
-2. 写 `%APPDATA%\MDiary\attachments\<hash[0:2]>\<hash>.<ext>`（同 hash 已存在则跳过）；
+2. 写 `<数据目录>\attachments\<hash[0:2]>\<hash>.<ext>`（同 hash 已存在则跳过）；
 3. 插 `attachments` 行；
 4. 正文插入 `![原名](assets/<hash>.<ext>)`。
 预览时 `MarkdownView` 拦截图片链接，命中 `assets/<hash>.<ext>` 就解析到本地附件路径；点击附件打开系统默认程序（`Process.run('cmd', ['/c','start','','<path>'])`）。
@@ -113,6 +114,13 @@ v2.0 同步时按 hash 上传即可幂等。代价是「文件已写、记录未
 ### 3.6 搜索
 v1.0 用 `LIKE '%kw%'` 覆盖标题与正文（中文子串匹配准确，1k 篇量级毫秒级）。
 FTS5 trigram 作为 v1.1 优化项：届时只替换 `EntryRepository.search` 的实现，界面不变。
+
+### 3.7 数据目录切换
+设置页「更改数据目录」→ 原生目录选择器 → 校验目标（必须是空目录、不能与当前目录嵌套）→
+`flushNow()` → `wal_checkpoint(TRUNCATE)` 并关库 → `DataRootMigration.run()` 复制数据库/附件/日志
+并逐文件比对大小 → 新库试开 → 写 `mdiary-location.txt` → 换绑定（db / 仓储 / 附件库 / markdownIo）→
+重新 `bootstrap()` → 删旧目录（只删本程序管理的文件；旧目录里装着 exe 时一律不动）。
+任一步失败：指针与连接都回到旧目录，旧数据原样保留，异常抛给设置页提示。
 
 ## 4. 依赖清单
 

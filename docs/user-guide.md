@@ -34,11 +34,13 @@
 
 | 内容 | 位置 |
 |---|---|
-| 数据库 | `%APPDATA%\MDiary\mdiary.sqlite` |
-| 附件 | `%APPDATA%\MDiary\attachments\` |
+| 数据库 | `MDiaryData\mdiary.sqlite`（默认在 mdiary.exe 同目录） |
+| 附件 | `MDiaryData\attachments\` |
 | 设置 | 同目录数据库内 `app_meta` 表 |
 
-- **备份**：关闭程序后复制整个 `%APPDATA%\MDiary` 目录即可。
+- **换位置**：设置 → 数据 → 「更改数据目录」，在资源管理器里选个文件夹。
+  数据库与附件会复制过去并逐文件校验，校验通过后旧目录被删除、程序继续用新位置（重启也记得）。
+- **备份**：关闭程序后复制整个数据目录（`MDiaryData\`）即可；程序可以整个目录拷到别的电脑上用。
 - **迁移/长期归档**：设置 → 整库导出，得到「每篇一个 .md + `assets\` 附件」的普通目录，
   可用 Typora / VS Code / Obsidian 直接打开。
 - **导入**：设置 → 从目录导入 .md，递归扫描；同一天且正文相同的条目自动跳过，重复导入不会产生副本。

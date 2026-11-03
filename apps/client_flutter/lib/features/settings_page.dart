@@ -1,8 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
+import '../core/formatters.dart';
+import '../data/data_root_migration.dart';
 import '../state/app_scope.dart';
+import '../state/app_state.dart';
 import '../ui/widgets.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -88,15 +92,36 @@ class SettingsPage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.folder_outlined),
                   title: const Text('数据目录'),
-                  subtitle: SelectableText(
-                    state.dataRootPath,
-                    style: theme.textTheme.bodySmall,
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      SelectableText(
+                        state.dataRootPath,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      if (state.dataRootSourceLabel.isNotEmpty)
+                        Text(
+                          state.dataRootSourceLabel,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                    ],
                   ),
                   trailing: IconButton(
                     tooltip: '在资源管理器中打开',
                     icon: const Icon(Icons.open_in_new),
                     onPressed: () => state.openInSystem(state.dataRootPath),
                   ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.drive_file_move_outline),
+                  title: const Text('更改数据目录'),
+                  subtitle: const Text(
+                    '在资源管理器里选个文件夹，数据库与附件会迁移过去；迁移成功后旧目录会被删除',
+                  ),
+                  onTap: () => _changeDataRoot(context, state),
                 ),
                 if (state.dataRootNotice != null) ...<Widget>[
                   const Divider(height: 1),
@@ -105,9 +130,9 @@ class SettingsPage extends StatelessWidget {
                       Icons.warning_amber_rounded,
                       color: theme.colorScheme.error,
                     ),
-                    title: const Text('数据未存放在默认位置'),
+                    title: const Text('数据未存放在首选位置'),
                     subtitle: Text(
-                      '默认目录不可写，已自动改用上面的目录。'
+                      '首选目录不可写，已自动改用上面的目录。'
                       '原因：${state.dataRootNotice}',
                       style: theme.textTheme.bodySmall,
                     ),
@@ -225,6 +250,77 @@ class SettingsPage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// 选目录 -> 确认 -> 迁移 -> 提示结果。失败时数据仍在旧目录。
+  static Future<void> _changeDataRoot(
+    BuildContext context,
+    AppState state,
+  ) async {
+    final current = state.dataRootPath;
+    final picked = await state.pickDirectory(
+      title: '选择新的数据目录（数据库与附件会迁移到这里）',
+    );
+    if (picked == null || !context.mounted) return;
+
+    final normalized = p.canonicalize(picked);
+    if (p.equals(normalized, p.canonicalize(current))) {
+      _snack(context, '这已经是当前数据目录');
+      return;
+    }
+    final blocked = DataRootMigration.blockingReason(normalized);
+    if (blocked != null) {
+      _snack(context, blocked);
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('迁移数据目录？'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Text('当前目录：'),
+            SelectableText(current),
+            const SizedBox(height: 10),
+            const Text('迁移到：'),
+            SelectableText(normalized),
+            const SizedBox(height: 10),
+            const Text(
+              '会逐文件复制并校验；校验通过后切换到新目录，旧目录随之删除。'
+              '迁移过程中请不要在别处写这个库。',
+            ),
+          ],
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('开始迁移'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      final result = await state.changeDataRoot(normalized);
+      if (context.mounted) {
+        _snack(
+          context,
+          '已迁移 ${result.files} 个文件（${formatBytes(result.bytes)}）到 ${result.target}',
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        _snack(context, '迁移失败：$error。数据仍在 $current');
+      }
+    }
   }
 
   static void _snack(BuildContext context, String message) {

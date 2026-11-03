@@ -2,18 +2,21 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
-/// 数据根目录的来源，决定设置页要不要提示「数据没放在默认位置」。
+/// 数据根目录的来源。
 enum DataRootSource {
-  /// `MDIARY_HOME` 环境变量（测试 / 便携模式，用户显式指定）。
+  /// `MDIARY_HOME` 环境变量（测试 / 便携模式，显式指定）。
   envOverride,
 
-  /// 平台默认位置（Windows 为 `%APPDATA%\MDiary`）。
-  platformDefault,
+  /// 用户在设置页选择并记住的目录。
+  userChosen,
 
-  /// 默认位置不可写时，退到程序所在目录旁的 `MDiaryData`。
-  portableFallback,
+  /// 默认：可执行文件同目录下的 `MDiaryData`（绿色版，不写系统目录）。
+  portableDefault,
 
-  /// 再不可写时，退到系统临时目录（重启后可能被清理）。
+  /// 可执行文件目录不可写时退回 `%APPDATA%\MDiary`。
+  appDataFallback,
+
+  /// 再不可写时退回系统临时目录（重启后可能被清理）。
   tempFallback,
 }
 
@@ -28,12 +31,11 @@ class DataRoot {
   final String path;
   final DataRootSource source;
 
-  /// 仅在发生回退时非空：原计划使用的目录 + 失败原因。
+  /// 仅在实际跳过了更优先的候选时非空：原计划目录 + 失败原因。
   final String? fallbackReason;
 
-  bool get isFallback =>
-      source == DataRootSource.portableFallback ||
-      source == DataRootSource.tempFallback;
+  /// 是否没落在首选位置上（设置页 / 首页要提示）。
+  bool get isFallback => fallbackReason != null;
 }
 
 /// 所有候选目录都不可用时抛出，消息直接面向用户。
@@ -46,53 +48,126 @@ class DataRootUnavailable implements Exception {
   String toString() => message;
 }
 
+/// `mdiary-location.txt` 的读写：记住用户选过的数据目录。
+///
+/// 默认放在可执行文件旁边（绿色版跟着 exe 走，搬走整个目录即可）。
+/// [directoryPath] 为 null 表示当前环境没有稳定的程序目录（flutter_tester / dart run）。
+class DataLocationStore {
+  const DataLocationStore(this.directoryPath);
+
+  final String? directoryPath;
+
+  /// 生产环境：exe 同目录。
+  factory DataLocationStore.portable() =>
+      DataLocationStore(AppPaths.exeDirectory);
+
+  String? get filePath => directoryPath == null
+      ? null
+      : p.join(directoryPath!, AppPaths.locationFileName);
+
+  /// 读不到 / 空文件都当作「没设置过」。
+  String? read() {
+    final path = filePath;
+    if (path == null) return null;
+    final file = File(path);
+    if (!file.existsSync()) return null;
+    final text = file.readAsStringSync().trim();
+    return text.isEmpty ? null : text;
+  }
+
+  /// 写入并读回校验；写不了（exe 目录只读）直接抛错，
+  /// 避免「换了目录但下次启动又回去」。
+  Future<void> write(String dataRoot) async {
+    final path = filePath;
+    if (path == null) {
+      throw const DataRootUnavailable('当前运行环境没有可用的程序目录，无法记住新的数据目录');
+    }
+    final file = File(path);
+    await file.parent.create(recursive: true);
+    await file.writeAsString(dataRoot, flush: true);
+    final readBack = file.readAsStringSync().trim();
+    if (readBack != dataRoot) {
+      throw DataRootUnavailable('无法写入 $path（读回内容不一致），新的数据目录没有被记住');
+    }
+  }
+}
+
 /// 应用数据目录解析。
 ///
-/// v1.0 只依赖 dart:io（不引入 path_provider 插件），以便：
-/// 1. 少一个平台插件 -> 首次编译失败面更小；
-/// 2. 单测可以直接换目录（MDIARY_HOME 环境变量）。
+/// 解析顺序：
+/// 1. `MDIARY_HOME` 环境变量（显式指定，只有它一个候选，写不了就报错）；
+/// 2. `mdiary-location.txt` 里记住的目录（设置页改过路径）；
+/// 3. `mdiary.exe` 同目录的 `MDiaryData`（默认，绿色版）；
+/// 4. `%APPDATA%\MDiary`（exe 在 Program Files 等不可写位置时的兼容路径）；
+/// 5. 系统临时目录。
 ///
-/// 原则：**能启动比「待在该在的地方」更重要**。
-/// `%APPDATA%` 在受限进程（沙箱 / 低完整性令牌 / 漫游配置被重定向）里可能只给读权限，
-/// 此时直接 `create` 会抛 `PathAccessException(OS Error: 5)` 让应用白屏。
-/// 因此按「显式指定 -> 平台默认 -> 程序旁 MDiaryData -> 系统临时目录」依次探测，
-/// 找到第一个真的能写的目录；只有全部不可写才报错，并提示用 MDIARY_HOME 指定。
+/// 每个候选都真写一次探针文件才认定可用：`create` 对已存在的只读目录不会报错，
+/// 只靠它会把问题推迟到打开数据库时才暴露。
 class AppPaths {
   AppPaths._();
 
   static const String dataDirName = 'MDiary';
   static const String portableDirName = 'MDiaryData';
+  static const String locationFileName = 'mdiary-location.txt';
   static const String probeFileName = '.write_probe';
 
-  static late final Directory root;
+  /// 没有稳定「程序目录」的宿主进程（单测 / dart run），不能拿它做便携目录。
+  static const List<String> _testHosts = <String>[
+    'flutter_tester',
+    'dart',
+    'flutter',
+  ];
+
+  static late Directory root;
+
+  /// 位置指针的存放处；测试可替换成临时目录。
+  static DataLocationStore? locationStore;
+
   static DataRoot? _resolution;
   static bool _initialized = false;
 
-  /// 没有稳定「程序目录」的宿主进程（单测 / dart run），不能拿它做便携回退。
-  static const List<String> _testHosts = <String>['flutter_tester', 'dart', 'flutter'];
+  /// 当前数据根目录的解析结果（未 init 时为 null）。
+  static DataRoot? get resolution => _resolution;
 
-  /// 可用环境变量 MDIARY_HOME 覆盖数据根目录（测试与便携模式用）。
+  /// 是否退到了首选位置以外。
+  static bool get isFallback => _resolution?.isFallback ?? false;
+
+  /// 回退原因；未回退时为 null。
+  static String? get fallbackReason => _resolution?.fallbackReason;
+
+  /// 可执行文件所在目录；flutter_tester / dart 宿主下为 null。
+  static String? get exeDirectory =>
+      _exeDirectoryOf(Platform.resolvedExecutable);
+
   static Future<void> init() async {
     if (_initialized) return;
+    locationStore ??= DataLocationStore.portable();
     final resolved = await resolve(
       env: Platform.environment,
       platformKey: _platformKey(),
       resolvedExecutable: Platform.resolvedExecutable,
       tempDir: Directory.systemTemp.path,
+      storedLocation: locationStore?.read(),
     );
+    adopt(resolved);
+  }
+
+  /// 直接采用一个解析结果（切换目录时也走这里）。
+  static void adopt(DataRoot resolved) {
     root = Directory(resolved.path);
     _resolution = resolved;
     _initialized = true;
   }
 
-  /// 当前的解析结果（未 init 时为 null）。
-  static DataRoot? get resolution => _resolution;
-
-  /// 是否退到了默认位置以外的目录。
-  static bool get isFallback => _resolution?.isFallback ?? false;
-
-  /// 回退原因；未回退时为 null。
-  static String? get fallbackReason => _resolution?.fallbackReason;
+  /// 迁移到用户选择的目录：先写位置指针再切换，保证重启后还在新位置。
+  static Future<void> switchTo(String dataRoot) async {
+    final normalized = p.canonicalize(dataRoot);
+    await prepare(normalized);
+    final store = locationStore ?? DataLocationStore.portable();
+    await store.write(normalized);
+    locationStore = store;
+    adopt(DataRoot(path: normalized, source: DataRootSource.userChosen));
+  }
 
   static String get databaseFile => p.join(root.path, 'mdiary.sqlite');
 
@@ -112,41 +187,42 @@ class AppPaths {
     required String platformKey,
     required String tempDir,
     String? resolvedExecutable,
+    String? storedLocation,
     Future<void> Function(String path)? prepare,
   }) async {
-    final preparePath = prepare ?? _prepare;
+    final preparePath = prepare ?? AppPaths.prepare;
     final override = (env['MDIARY_HOME'] ?? '').trim();
     final candidates = <_Candidate>[];
 
     if (override.isNotEmpty) {
       // 用户显式指定就只认它：不静默换目录，否则数据会跑到意想不到的地方。
       candidates.add(
-        _Candidate(
-          p.join(override, dataDirName),
-          DataRootSource.envOverride,
-        ),
+        _Candidate(p.join(override, dataDirName), DataRootSource.envOverride),
       );
     } else {
-      candidates.add(
-        _Candidate(
-          p.join(_platformBase(env, platformKey), dataDirName),
-          DataRootSource.platformDefault,
-        ),
-      );
-      final portableBase = _portableBase(resolvedExecutable);
-      if (portableBase != null) {
+      final remembered = (storedLocation ?? '').trim();
+      if (remembered.isNotEmpty) {
+        candidates.add(
+          _Candidate(p.canonicalize(remembered), DataRootSource.userChosen),
+        );
+      }
+      final exeDir = _exeDirectoryOf(resolvedExecutable);
+      if (exeDir != null) {
         candidates.add(
           _Candidate(
-            p.join(portableBase, portableDirName),
-            DataRootSource.portableFallback,
+            p.join(exeDir, portableDirName),
+            DataRootSource.portableDefault,
           ),
         );
       }
       candidates.add(
         _Candidate(
-          p.join(tempDir, dataDirName),
-          DataRootSource.tempFallback,
+          p.join(_platformBase(env, platformKey), dataDirName),
+          DataRootSource.appDataFallback,
         ),
+      );
+      candidates.add(
+        _Candidate(p.join(tempDir, dataDirName), DataRootSource.tempFallback),
       );
     }
 
@@ -170,9 +246,8 @@ class AppPaths {
     );
   }
 
-  /// 建目录并真写一次探针文件：`create` 对已存在的只读目录不会报错，
-  /// 只靠它会把问题推迟到打开数据库时才暴露。
-  static Future<void> _prepare(String path) async {
+  /// 建目录并真写一次探针文件：只有真能写才算可用。
+  static Future<void> prepare(String path) async {
     final dir = Directory(path);
     await dir.create(recursive: true);
     final probe = File(p.join(path, probeFileName));
@@ -190,34 +265,28 @@ class AppPaths {
     return 'linux';
   }
 
-  static String _platformBase(Map<String, String> env, String platformKey) {
-    switch (platformKey) {
-      case 'windows':
-        return env['APPDATA'] ??
-            p.join(env['USERPROFILE'] ?? '.', 'AppData', 'Roaming');
-      case 'macos':
-        return p.join(
-          env['HOME'] ?? '.',
-          'Library',
-          'Application Support',
-        );
-      default:
-        final xdg = env['XDG_DATA_HOME'];
-        return (xdg != null && xdg.isNotEmpty)
-            ? xdg
-            : p.join(env['HOME'] ?? '.', '.local', 'share');
-    }
-  }
-
-  /// 便携目录用「可执行文件同级」；在 flutter_tester / dart 宿主里没有稳定的
-  /// 程序目录，跳过这一级，免得测试把数据写进 SDK。
-  static String? _portableBase(String? resolvedExecutable) {
+  static String? _exeDirectoryOf(String? resolvedExecutable) {
     if (resolvedExecutable == null || resolvedExecutable.trim().isEmpty) {
       return null;
     }
     final name = p.basenameWithoutExtension(resolvedExecutable).toLowerCase();
     if (_testHosts.contains(name)) return null;
     return p.dirname(resolvedExecutable);
+  }
+
+  static String _platformBase(Map<String, String> env, String platformKey) {
+    switch (platformKey) {
+      case 'windows':
+        return env['APPDATA'] ??
+            p.join(env['USERPROFILE'] ?? '.', 'AppData', 'Roaming');
+      case 'macos':
+        return p.join(env['HOME'] ?? '.', 'Library', 'Application Support');
+      default:
+        final xdg = env['XDG_DATA_HOME'];
+        return (xdg != null && xdg.isNotEmpty)
+            ? xdg
+            : p.join(env['HOME'] ?? '.', '.local', 'share');
+    }
   }
 }
 

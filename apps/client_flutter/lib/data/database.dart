@@ -112,5 +112,10 @@ class AppDatabase {
     ''');
   }
 
+  /// 关闭前把 WAL 合并回主库：迁移/备份时只需要复制一个 `mdiary.sqlite`。
+  void checkpoint() {
+    raw.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+  }
+
   void dispose() => raw.dispose();
 }

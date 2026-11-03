@@ -55,18 +55,21 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Clean   # 清理后�
 
 | 内容 | 路径 |
 |---|---|
-| 数据库 | `%APPDATA%\MDiary\mdiary.sqlite` |
-| 附件库 | `%APPDATA%\MDiary\attachments\<sha256前两位>\<sha256>.<ext>` |
-| 错误日志 | `%APPDATA%\MDiary\logs\error.log`（发生异常时才创建，超过 1 MB 轮转为 `error.log.old`） |
-| 数据根目录覆盖 | 环境变量 `MDIARY_HOME`（便携模式；实际数据目录为 `%MDIARY_HOME%\MDiary`） |
+| 数据库 | `<exe 目录>\MDiaryData\mdiary.sqlite`（默认） |
+| 附件库 | `<exe 目录>\MDiaryData\attachments\<sha256前两位>\<sha256>.<ext>` |
+| 错误日志 | `<exe 目录>\MDiaryData\logs\error.log`（发生异常时才创建，超过 1 MB 轮转为 `error.log.old`） |
+| 位置记忆 | `<exe 目录>\mdiary-location.txt`（设置页改过数据目录后才出现） |
+| 环境变量覆盖 | `MDIARY_HOME`（实际数据目录为 `%MDIARY_HOME%\MDiary`，测试/CI 用） |
 
-**默认目录不可写时不会崩溃**：受限环境（沙箱、低权限令牌、漫游配置被重定向，或刚删过目录就重启）
-下 `%APPDATA%\MDiary` 可能只给读权限。此时按
-`%APPDATA%\MDiary` → `mdiary.exe` 旁的 `MDiaryData` → 系统临时目录 `MDiary`
-的顺序选第一个真能写的位置，首页顶部常驻提示实际使用的目录，设置页给出原因与完整路径；
-错误日志里也会记一条 `Startup`。要固定目录就用 `MDIARY_HOME`（指定后不再回退，写不了直接报错）。
+**默认就地存放（绿色版）**：首次启动在 `mdiary.exe` 同目录建 `MDiaryData\`，数据库、附件、日志都在里面；
+连同 exe 整个目录拷走即可搬家。exe 目录不可写（放在 `Program Files` 等）时依次退到
+`%APPDATA%\MDiary`、系统临时目录，首页顶部会常驻提示实际使用的目录，设置页给出原因。
 
-备份 = 复制整个 `%APPDATA%\MDiary`，或使用「整库导出」得到纯 Markdown 副本。
+**更换数据目录**：设置 → 数据 → 「更改数据目录」，在资源管理器里选个文件夹即可。
+程序会逐文件复制数据库与附件并校验大小，校验通过后切换到新目录、删除旧目录，
+新位置记录在 `mdiary-location.txt`（重启后继续用新目录）；任何一步失败都会原地回滚，旧数据不动。
+
+备份 = 复制整个数据目录，或使用「整库导出」得到纯 Markdown 副本。
 
 ## 快捷键
 

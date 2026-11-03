@@ -1,0 +1,222 @@
+@TestOn('windows')
+library;
+
+import 'dart:ffi' hide Size;
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mdiary/core/app_paths.dart';
+import 'package:mdiary/data/attachment_repository.dart';
+import 'package:mdiary/data/attachment_store.dart';
+import 'package:mdiary/data/data_root_migration.dart';
+import 'package:mdiary/data/database.dart';
+import 'package:mdiary/data/entry_repository.dart';
+import 'package:mdiary/data/markdown_io.dart';
+import 'package:mdiary/data/meta_repository.dart';
+import 'package:mdiary/features/settings_page.dart';
+import 'package:mdiary/state/app_scope.dart';
+import 'package:mdiary/state/app_state.dart';
+import 'package:path/path.dart' as p;
+import 'package:sqlite3/open.dart';
+
+/// 运行中切换数据目录：条目/附件要跟过去，位置要记住，旧目录要清掉；
+/// 失败时必须原地回滚，不能丢稿。需要真实 sqlite3.dll，缺失时整组跳过。
+void main() {
+  final dll = _locateSqlite3();
+  if (dll != null) {
+    open.overrideFor(OperatingSystem.windows, () => DynamicLibrary.open(dll));
+  }
+  final skip = dll == null;
+
+  late Directory sandbox;
+  late Directory oldRoot;
+  late Directory newRoot;
+  late AppState state;
+
+  setUp(() async {
+    sandbox = Directory.systemTemp.createTempSync('mdiary_switch_');
+    oldRoot = Directory(p.join(sandbox.path, 'old'))..createSync();
+    newRoot = Directory(p.join(sandbox.path, 'new'));
+
+    final db = AppDatabase.open(
+      p.join(oldRoot.path, DataRootMigration.databaseName),
+    );
+    final entryRepo = EntryRepository(db);
+    final attachmentRepo = AttachmentRepository(db);
+    final store = AttachmentStore(
+      Directory(p.join(oldRoot.path, 'attachments')),
+    );
+    state = AppState(
+      db: db,
+      entryRepo: entryRepo,
+      attachmentRepo: attachmentRepo,
+      metaRepo: MetaRepository(db),
+      store: store,
+      markdownIo: MarkdownIo(
+        entries: entryRepo,
+        attachments: attachmentRepo,
+        store: store,
+      ),
+      filePicker: () async => null,
+      directoryPicker: (title) async => newRoot.path,
+      dataRootPath: oldRoot.path,
+    );
+    // 位置指针写到沙箱里，别碰真实 exe 目录
+    AppPaths.locationStore = DataLocationStore(sandbox.path);
+    await state.bootstrap();
+  });
+
+  tearDown(() {
+    state.db.dispose();
+    if (sandbox.existsSync()) sandbox.deleteSync(recursive: true);
+  });
+
+  test('迁移后条目与附件都在新目录，旧目录被删掉', () async {
+    await state.createEntry();
+    state.draftChanged(title: '搬家测试', body: '正文内容', immediate: true);
+    await state.flushNow();
+    File(p.join(oldRoot.path, 'attachments', 'ab', 'deadbeef.png'))
+      ..createSync(recursive: true)
+      ..writeAsBytesSync(<int>[1, 2, 3]);
+
+    final result = await state.changeDataRoot(newRoot.path);
+
+    final target = p.canonicalize(newRoot.path);
+    expect(result.target, target);
+    expect(result.files, greaterThanOrEqualTo(2), reason: '库 + 附件');
+    expect(state.dataRootPath, target);
+    expect(File(p.join(target, 'mdiary.sqlite')).existsSync(), isTrue);
+    expect(state.entryRepo.count(), 1);
+    expect(state.entries.single.title, '搬家测试');
+    expect(
+      File(p.join(target, 'attachments', 'ab', 'deadbeef.png')).existsSync(),
+      isTrue,
+    );
+    expect(state.attachmentsPath, p.join(target, 'attachments'));
+    expect(oldRoot.existsSync(), isFalse, reason: '迁移成功后旧目录应被删除');
+    expect(
+      File(p.join(sandbox.path, AppPaths.locationFileName)).readAsStringSync(),
+      target,
+      reason: '位置指针要指向新目录',
+    );
+    expect(AppPaths.root.path, target);
+
+    // 换库后还能继续写
+    await state.createEntry();
+    state.draftChanged(title: '搬家后继续写', immediate: true);
+    await state.flushNow();
+    expect(state.entryRepo.count(), 2);
+  }, skip: skip);
+
+  test('目标目录不可用时抛错，数据与状态都留在旧目录', () async {
+    await state.createEntry();
+    state.draftChanged(title: '不该丢', body: '原稿', immediate: true);
+    await state.flushNow();
+
+    Directory(newRoot.path).createSync();
+    File(p.join(newRoot.path, 'x.txt')).writeAsStringSync('不属于 MDiary');
+
+    await expectLater(
+      state.changeDataRoot(newRoot.path),
+      throwsA(isA<DataRootMigrationException>()),
+    );
+
+    expect(state.dataRootPath, oldRoot.path);
+    expect(state.entryRepo.count(), 1);
+    expect(state.entries.single.title, '不该丢');
+    expect(
+      File(p.join(oldRoot.path, 'mdiary.sqlite')).existsSync(),
+      isTrue,
+      reason: '回滚后旧库必须还在',
+    );
+
+    // 回滚之后还能正常继续编辑
+    await state.createEntry();
+    state.draftChanged(title: '回滚后继续写', immediate: true);
+    await state.flushNow();
+    expect(state.entryRepo.count(), 2);
+  }, skip: skip);
+
+  test('切到同一个目录直接拒绝，不动数据', () async {
+    await expectLater(
+      state.changeDataRoot(oldRoot.path),
+      throwsA(
+        isA<DataRootMigrationException>().having(
+          (e) => e.message,
+          'message',
+          contains('这已经是当前数据目录'),
+        ),
+      ),
+    );
+    expect(state.dataRootPath, oldRoot.path);
+  }, skip: skip);
+
+  testWidgets('设置页「更改数据目录」-> 确认 -> 真的迁移过去', (tester) async {
+    await state.createEntry();
+    state.draftChanged(title: '界面迁移', body: '正文', immediate: true);
+    await state.flushNow();
+
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      AppScope(
+        state: state,
+        child: const MaterialApp(home: SettingsPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('更改数据目录'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('更改数据目录'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('迁移数据目录？'), findsOneWidget);
+    expect(find.textContaining(p.canonicalize(newRoot.path)), findsWidgets);
+
+    // 迁移是真实文件 IO。点「开始迁移」后，继续推进要「真实等待 + pump」交替：
+    // 只 runAsync 不会让 fake-async 区的后续微任务跑起来，只 pump 又等不到磁盘 IO。
+    await tester.runAsync(() async {
+      await tester.tap(find.widgetWithText(FilledButton, '开始迁移'));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    final target = p.canonicalize(newRoot.path);
+    for (var i = 0; i < 100; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+      if (state.dataRootPath == target) break;
+    }
+    await tester.pumpAndSettle();
+
+    expect(state.dataRootPath, target);
+    expect(File(p.join(target, 'mdiary.sqlite')).existsSync(), isTrue);
+    expect(state.entries.single.title, '界面迁移');
+    expect(tester.takeException(), isNull);
+
+    // 放掉 SnackBar 的自动关闭计时器
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+  }, skip: skip);
+}
+
+String? _locateSqlite3() {
+  final fromEnv = Platform.environment['MDIARY_SQLITE_DLL'];
+  if (fromEnv != null && File(fromEnv).existsSync()) return fromEnv;
+  for (final candidate in <String>[
+    'build/windows/x64/runner/Release/sqlite3.dll',
+    'build/windows/x64/runner/Debug/sqlite3.dll',
+  ]) {
+    final file = File(candidate);
+    if (file.existsSync()) return file.absolute.path;
+  }
+  return null;
+}

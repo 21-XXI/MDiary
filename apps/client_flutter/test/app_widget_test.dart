@@ -439,6 +439,42 @@ void main() {
     final button = tester.getRect(find.widgetWithText(TextButton, '打开目录'));
     expect(button.right, lessThanOrEqualTo(tester.view.physicalSize.width));
   }, skip: skipWidgetTests);
+
+  testWidgets('设置页「更改数据目录」选到同一目录时只提示，不迁移', (tester) async {
+    tester.view.physicalSize = const Size(1280, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(MDiaryApp(state: state));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsPage), findsOneWidget);
+
+    final scrollable = find
+        .descendant(
+          of: find.byType(SettingsPage),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.text('更改数据目录'),
+      200,
+      scrollable: scrollable,
+    );
+
+    nextDirectory = tempDir.path; // 与当前数据目录相同
+    await tester.tap(find.text('更改数据目录'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('这已经是当前数据目录'), findsOneWidget);
+    expect(state.dataRootPath, tempDir.path);
+
+    // 放掉 SnackBar 的自动关闭计时器
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+  }, skip: skipWidgetTests);
 }
 
 // 1x1 透明 PNG：足够走通「图片附件」的完整链路
