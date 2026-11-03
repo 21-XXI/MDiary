@@ -67,6 +67,11 @@ void main() {
     final entry = state.entries.single;
     expect(entry.bodyMd, contains('assets/'));
     expect(entry.bodyMd, contains('.png'));
+    expect(
+      entry.bodyMd,
+      contains('dropped.png'),
+      reason: '附件名要写进 .md 正文（纯文本里也能看出是什么）',
+    );
 
     final attachments = state.attachmentRepo.listByEntry(entry.id);
     expect(attachments, hasLength(1));

@@ -67,6 +67,71 @@ void main() {
     expect(find.textContaining('附件缺失'), findsOneWidget);
   });
 
+  testWidgets('引用里带文件名：预览显示彩色名字，点一下就打开', (tester) async {
+    final file = File('${tempDir.path}/pic.png')..writeAsBytesSync(tinyPng);
+    String? opened;
+    final hash = 'c' * 64;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownView(
+            data: '![西湖.png](assets/$hash.png)',
+            resolveLocalPath: (reference) => file.path,
+            onOpenLink: (reference) => opened = reference,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('西湖.png'), findsOneWidget, reason: '名字要显示出来');
+    await tester.tap(find.text('西湖.png'));
+    await tester.pumpAndSettle();
+    expect(opened, 'assets/$hash.png');
+  });
+
+  testWidgets('老数据没有 alt 时，用数据库里的文件名兜底', (tester) async {
+    String? asked;
+    final hash = 'd' * 64;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownView(
+            data: '![](assets/$hash.png)',
+            resolveLocalPath: (reference) => null,
+            resolveName: (reference) {
+              asked = reference;
+              return '旧照片.jpg';
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(asked, 'assets/$hash.png');
+    expect(find.textContaining('旧照片.jpg'), findsOneWidget);
+  });
+
+  testWidgets('没名字也查不到时退化成 hash 短码，而不是空标签', (tester) async {
+    final hash = 'e' * 64;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownView(
+            data: '![](assets/$hash.png)',
+            resolveLocalPath: (reference) => null,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.textContaining('eeeeeeee…'), findsOneWidget);
+  });
+
   testWidgets('链接点击回调把引用交给外部处理', (tester) async {
     String? opened;
     await tester.pumpWidget(

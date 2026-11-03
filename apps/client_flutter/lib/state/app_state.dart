@@ -31,9 +31,19 @@ class AttachedFile {
   final StoredBlob blob;
   final bool isImage;
 
+  /// 写进正文的引用：**文件名始终写在 Markdown 里**（图片用 alt 文本），
+  /// 这样导出的 .md 纯文本也能看出附件叫什么；预览里再把它渲染成彩色可点标签。
   String get markdownLink => isImage
-      ? '![](assets/${blob.sha256}${blob.ext})'
-      : '[${attachment.filename}](assets/${blob.sha256}${blob.ext})';
+      ? '![${_label(attachment.filename)}](assets/${blob.sha256}${blob.ext})'
+      : '[${_label(attachment.filename)}](assets/${blob.sha256}${blob.ext})';
+
+  /// 文件名里的 `[`/`]` 会破坏 Markdown 链接语法，按 CommonMark 的转义写。
+  static String _label(String filename) => filename
+      .replaceAll('\\', r'\\')
+      .replaceAll('[', r'\[')
+      .replaceAll(']', r'\]')
+      .replaceAll('\r', ' ')
+      .replaceAll('\n', ' ');
 }
 
 /// 一次文件选择的产物（与 file_picker 解耦，便于测试注入）。

@@ -152,6 +152,20 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
     return _state.store.pathFor(hash, ext);
   }
 
+  /// 老数据正文里只有 `![](assets/<sha>.png)`，没有文件名；
+  /// 用当前日记的附件表反查原始文件名，预览里就能显示「西湖.png」。
+  String? _nameOfReference(String reference) {
+    var ref = reference;
+    if (ref.startsWith('./')) ref = ref.substring(2);
+    if (ref.startsWith('assets/')) ref = ref.substring('assets/'.length);
+    final dot = ref.lastIndexOf('.');
+    final hash = dot > 0 ? ref.substring(0, dot) : ref;
+    for (final attachment in _attachments) {
+      if (attachment.sha256 == hash) return attachment.filename;
+    }
+    return null;
+  }
+
   void _onOpenReference(String reference) {
     final local = _resolveReference(reference);
     if (local != null) {
@@ -285,6 +299,7 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
           child: MarkdownView(
             data: _bodyController.text,
             resolveLocalPath: _resolveReference,
+            resolveName: _nameOfReference,
             onOpenLink: _onOpenReference,
           ),
         );
@@ -298,6 +313,7 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
                 child: MarkdownView(
                   data: _bodyController.text,
                   resolveLocalPath: _resolveReference,
+                  resolveName: _nameOfReference,
                   onOpenLink: _onOpenReference,
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 48),
                 ),

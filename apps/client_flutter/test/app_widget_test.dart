@@ -315,7 +315,7 @@ void main() {
     await settleAsync(tester);
 
     final entry = state.selected!;
-    expect(entry.bodyMd, contains('![](assets/'));
+    expect(entry.bodyMd, contains('![shot.png](assets/'));
     expect(entry.bodyMd, contains('.png'));
     expect(state.attachmentCountOf(entry.id), 1);
     final archiveFiles = Directory('${tempDir.path}/attachments')

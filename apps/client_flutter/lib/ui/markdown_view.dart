@@ -5,11 +5,19 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 /// Markdown 预览。附件图片走本地内容寻址库；找不到时给出可见的占位提示，
 /// 而不是静默空白（对应验收 D2/E1）。
+///
+/// 附件名字来自三处，优先级从高到低：
+/// 1. 正文里的 alt 文本（新写入的引用形如 `![西湖.png](assets/<sha>.png)`）；
+/// 2. [resolveName]（老数据只有 `![](assets/<sha>.png)`，用数据库里的原始文件名补上）；
+/// 3. hash 短码兜底。
+///
+/// 名字渲染成彩色小标签，点一下就用系统默认程序打开附件。
 class MarkdownView extends StatelessWidget {
   const MarkdownView({
     super.key,
     required this.data,
     required this.resolveLocalPath,
+    this.resolveName,
     this.onOpenLink,
     this.padding = const EdgeInsets.fromLTRB(24, 16, 24, 64),
   });
@@ -18,6 +26,9 @@ class MarkdownView extends StatelessWidget {
 
   /// `assets/<sha>.<ext>` -> 本地绝对路径；返回 null 表示缺失。
   final String? Function(String reference) resolveLocalPath;
+
+  /// `assets/<sha>.<ext>` -> 附件原始文件名；返回 null 表示查不到。
+  final String? Function(String reference)? resolveName;
   final void Function(String reference)? onOpenLink;
   final EdgeInsets padding;
 
@@ -43,21 +54,38 @@ class MarkdownView extends StatelessWidget {
         imageBuilder: (uri, title, alt) {
           final reference = uri.toString();
           final path = resolveLocalPath(reference);
+          final name = _attachmentName(reference, alt);
+          final open = onOpenLink == null ? null : () => onOpenLink!(reference);
           if (path == null) {
-            return _MissingAttachment(
-              label: alt?.isNotEmpty == true ? alt! : reference,
+            return _AttachmentChip(
+              label: '附件缺失：$name',
+              missing: true,
+              onTap: open,
             );
           }
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: Image.file(
-                File(path),
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stack) =>
-                    _MissingAttachment(label: reference),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                GestureDetector(
+                  onTap: open,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.file(
+                      File(path),
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stack) => _AttachmentChip(
+                        label: '附件缺失：$name',
+                        missing: true,
+                        onTap: open,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                _AttachmentChip(label: name, missing: false, onTap: open),
+              ],
             ),
           );
         },
@@ -66,6 +94,19 @@ class MarkdownView extends StatelessWidget {
         },
       ),
     );
+  }
+
+  String _attachmentName(String reference, String? alt) {
+    final fromAlt = (alt ?? '').trim();
+    if (fromAlt.isNotEmpty && fromAlt != reference) return fromAlt;
+    final fromStore = (resolveName?.call(reference) ?? '').trim();
+    if (fromStore.isNotEmpty) return fromStore;
+    var ref = reference.startsWith('assets/')
+        ? reference.substring('assets/'.length)
+        : reference;
+    final dot = ref.lastIndexOf('.');
+    if (dot > 0) ref = ref.substring(0, dot);
+    return ref.length > 10 ? '${ref.substring(0, 8)}…' : ref;
   }
 
   MarkdownStyleSheet _buildStyleSheet(BuildContext context) {
@@ -116,44 +157,72 @@ class MarkdownView extends StatelessWidget {
       horizontalRuleDecoration: BoxDecoration(
         border: Border(top: BorderSide(color: scheme.outlineVariant, width: 1)),
       ),
-      a: TextStyle(color: scheme.primary, decoration: TextDecoration.underline),
+      // 附件（`[文件名](assets/<sha>.ext)`）也走链接渲染：用强调色，和正文区分开。
+      a: TextStyle(
+        color: scheme.tertiary,
+        fontWeight: FontWeight.w600,
+        decoration: TextDecoration.underline,
+        decorationColor: scheme.tertiary,
+      ),
     );
   }
 }
 
-class _MissingAttachment extends StatelessWidget {
-  const _MissingAttachment({required this.label});
+/// 附件名字标签：彩色 + 可点，点开用系统默认程序查看/编辑。
+class _AttachmentChip extends StatelessWidget {
+  const _AttachmentChip({
+    required this.label,
+    required this.missing,
+    this.onTap,
+  });
 
   final String label;
+  final bool missing;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.errorContainer.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(
-            Icons.broken_image_outlined,
-            size: 18,
-            color: theme.colorScheme.error,
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              '附件缺失：$label',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
+    final scheme = theme.colorScheme;
+    final color = missing ? scheme.error : scheme.tertiary;
+    final background = missing
+        ? scheme.errorContainer
+        : scheme.tertiaryContainer;
+    return Material(
+      color: background.withValues(alpha: 0.35),
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(
+                missing ? Icons.link_off : Icons.attach_file,
+                size: 14,
+                color: color,
               ),
-            ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (!missing) ...<Widget>[
+                const SizedBox(width: 4),
+                Icon(Icons.open_in_new, size: 12, color: color),
+              ],
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

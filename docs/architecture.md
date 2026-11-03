@@ -117,7 +117,12 @@ v2.0 同步时按 hash 上传即可幂等。代价是「文件已写、记录未
 1. `file_picker` 选择文件 → 读字节 → sha256；
 2. 写 `<数据目录>\attachments\<hash[0:2]>\<hash>.<ext>`（同 hash 已存在则跳过）；
 3. 插 `attachments` 行；
-4. 正文插入 `![原名](assets/<hash>.<ext>)`。
+4. 正文插入带**原文件名**的引用：图片 `![西湖.png](assets/<hash>.png)`，普通文件
+   `[会议纪要.pdf](assets/<hash>.pdf)`——纯文本 .md 里也能看出是什么附件，导出/导入仍按普通
+   Markdown 解析（`markdownLinkPattern` 保持不变，alt 文本原样保留）。
+5. 预览时 `MarkdownView` 的 `imageBuilder` 把图片画出来，并在下方渲染一个彩色「附件名」标签
+   （`resolveName` 用数据库里的文件名兜底老数据），点标签或图片走 `onOpenLink` → 系统默认程序打开。
+   普通附件链接同样可点。
 预览时 `MarkdownView` 拦截图片链接，命中 `assets/<hash>.<ext>` 就解析到本地附件路径；点击附件打开系统默认程序（`Process.run('cmd', ['/c','start','','<path>'])`）。
 
 ### 3.4 导出
