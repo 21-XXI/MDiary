@@ -53,9 +53,18 @@ class AttachmentRepository {
     return attachment;
   }
 
-  /// 每个条目的附件数（列表页角标一次查完，避免按行 N 次查询）。
-  Map<String, int> countsByEntry() {
+  /// 全库附件（星图用：一次拿到所有「日记 -> 附件」索引关系）。
+  List<Attachment> all() {
     final rows = _raw.select(
+      'SELECT * FROM attachments ORDER BY created_at ASC',
+    );
+    return rows
+        .map((row) => Attachment.fromMap(Map<String, Object?>.from(row)))
+        .toList(growable: false);
+  }
+
+  /// 每个条目的附件数（列表页角标一次查完，避免按行 N 次查询）。
+  Map<String, int> countsByEntry() {    final rows = _raw.select(
       'SELECT entry_id, COUNT(*) AS c FROM attachments GROUP BY entry_id',
     );
     return <String, int>{

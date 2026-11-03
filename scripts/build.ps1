@@ -1,4 +1,4 @@
-﻿# MDiary Windows Release 构建
+# MDiary Windows Release 构建
 #
 # 背景：Flutter 的 Windows 构建链（CMake -> MSBuild）在处理含中文的工程路径时
 # 会按 ANSI(GBK) 转码，导致 `Unable to read file ...\app.dill` 之类的失败。
@@ -50,7 +50,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'flutter pub get 失败' }
 
     Write-Host "==> flutter build windows --release" -ForegroundColor Cyan
-    flutter build windows --release
+    # --no-tree-shake-icons：图标树摇会把「常量 IconData 没直接写在 Icon() 里」的图标
+    # 从字体中裁掉，release 下变成看不见的按钮（debug/测试正常，极难发现）。
+    # 图标字体全量约 1.6 MB，换来的是「加图标不会再踩这个坑」。
+    flutter build windows --release --no-tree-shake-icons
     if ($LASTEXITCODE -ne 0) { throw 'Release 构建失败' }
 
     $exe = Join-Path (Get-Location) 'build\windows\x64\runner\Release\mdiary.exe'

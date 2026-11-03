@@ -13,6 +13,7 @@ apps/client_flutter/
     core/
       app_paths.dart          数据目录解析（默认 exe 同目录 MDiaryData；mdiary-location.txt
                               记住用户改过的位置；MDIARY_HOME 覆盖；不可写时逐级回退）
+      file_drop_channel.dart  接收 runner 转发进来的拖拽文件路径
       theme.dart              主题、字号、编辑器字体
       formatters.dart         日期/字数/字节格式化
       ids.dart                uuid v4 / device_id
@@ -31,6 +32,9 @@ apps/client_flutter/
     features/
       home_page.dart          双栏：列表 + 编辑区、快捷键、状态栏
       entry_editor_page.dart  标题/正文/工具栏/附件条/预览
+      star_map/
+        star_map_layout.dart  星图布局与命中测试（纯函数，可单测）
+        star_map_page.dart    星图画布、时间分组、点击打开
       trash_page.dart         回收站
       settings_page.dart      外观、数据、导入导出、关于
     ui/
@@ -104,8 +108,10 @@ v2.0 同步时按 hash 上传即可幂等。代价是「文件已写、记录未
 `createEntry(date: day)` 并 `refresh()` 按日期重排；列表里点开某篇时反过来把日历跳到它的月份。
 初始选中日 = 今天与最新一篇里更晚的那天（`_latestDay()`）。
 
-> 图标坑：release 构建会做图标树摇，只有「常量 `IconData` 直接写在 `Icon()` 构造处」才会保留。
-> 把 `Icons.x` 当参数传进包装组件会被裁掉，debug 正常、release 变空白按钮（`ui/month_calendar.dart` 有注释）。
+> 图标坑：release 构建默认会做图标树摇，只保留「常量 `IconData` 直接写在 `Icon()` 构造处」的图标；
+> 把 `Icons.x` 当参数传进包装组件会被裁掉，debug 正常、release 变空白按钮。
+> 因此 `scripts/build.ps1` 统一加 `--no-tree-shake-icons`（图标字体全量约 1.6 MB），
+> 新增图标时不用再逐个验证是否被保留。
 
 ### 3.3 附件
 1. `file_picker` 选择文件 → 读字节 → sha256；
@@ -132,6 +138,21 @@ FTS5 trigram 作为 v1.1 优化项：届时只替换 `EntryRepository.search` �
 并逐文件比对大小 → 新库试开 → 写 `mdiary-location.txt` → 换绑定（db / 仓储 / 附件库 / markdownIo）→
 重新 `bootstrap()` → 删旧目录（只删本程序管理的文件；旧目录里装着 exe 时一律不动）。
 任一步失败：指针与连接都回到旧目录，旧数据原样保留，异常抛给设置页提示。
+
+### 3.8 星图（全部 / 年 / 月 / 周）
+`features/star_map/star_map_layout.dart` 是纯布局：按周期把日记分桶（年 / 月 / 周一起点 / 全部），
+桶内排 3 列网格；附件按 sha 分组，**同一个 sha 只产生一颗附件星**，被 N 篇索引就连 N 条线
+（`refCount > 1` 画成带环的「共用星」）。`StarMap.hitTest` 命中日记星 / 附件星；
+`star_map_page.dart` 用 `CustomPainter` 画星星与连线，`InteractiveViewer` 负责缩放平移，
+点日记星 `pop(entry)` 回到主界面并 `select()`，点附件星走 `openInSystem()`。
+布局与命中都无 IO，单测直接喂 `Entry` / `Attachment` 列表。
+
+### 3.9 拖拽导入附件（Windows）
+`flutter_window.cpp` 里 `DragAcceptFiles(hwnd, TRUE)` + 处理 `WM_DROPFILES`，把路径转 UTF-8 后经
+`mdiary/drop` 方法通道的 `files` 方法发给 Dart（`core/file_drop_channel.dart` 安装回调）。
+`AppState.attachDroppedFiles()`：没有选中日记就先 `createEntry()`，逐个 `attachPath()`，
+再把 `assets/<sha>.<ext>` 引用追加进正文并 `flushNow()`（否则导出的 .md 只有附件没有引用）。
+超限 / 被占用的单个文件跳过，不影响其余文件。
 
 ## 4. 依赖清单
 

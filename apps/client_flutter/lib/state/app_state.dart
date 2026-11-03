@@ -143,6 +143,12 @@ class AppState extends ChangeNotifier {
   /// 附件根目录（设置页展示/打开用）。
   String get attachmentsPath => store.directory.path;
 
+  /// 全库日记（星图用；不受搜索过滤影响）。
+  List<Entry> get allEntries => entryRepo.query();
+
+  /// 全库附件索引关系（星图用）。
+  List<Attachment> get allAttachments => attachmentRepo.all();
+
   Future<void> bootstrap() async {
     deviceId = metaRepo.get('device_id') ?? '';
     if (deviceId.isEmpty) {
@@ -409,6 +415,39 @@ class AppState extends ChangeNotifier {
   Future<AttachedFile> attachPath(Entry entry, String path) async {
     final bytes = await File(path).readAsBytes();
     return attachBytes(entry, bytes, p.basename(path));
+  }
+
+  /// 从资源管理器拖进窗口的文件（Windows）：挂到当前正在写的日记上；
+  /// 没有打开的日记就先新建一篇。返回成功添加的个数。
+  ///
+  /// 与工具栏「插入附件」一致：除了落盘 + 写 attachments 表，还要把
+  /// `assets/<sha>.<ext>` 引用插进正文，导出的 .md 才带着附件。
+  Future<int> attachDroppedFiles(List<String> paths) async {
+    final files = <String>[];
+    for (final path in paths) {
+      if (File(path).existsSync()) files.add(path);
+    }
+    if (files.isEmpty) return 0;
+
+    final entry = _selected ?? await createEntry();
+    var body = _selected?.id == entry.id ? _pendingBody : entry.bodyMd;
+    var attached = 0;
+    for (final path in files) {
+      try {
+        final result = await attachPath(entry, path);
+        final current = body.trimRight();
+        body = current.isEmpty
+            ? result.markdownLink
+            : '$current\n\n${result.markdownLink}';
+        attached++;
+      } on Object {
+        // 单个文件失败（超限 / 被占用）不影响其余文件
+      }
+    }
+    if (attached == 0) return 0;
+    draftChanged(body: body, immediate: true);
+    await flushNow();
+    return attached;
   }
 
   /// 交给系统默认程序打开（附件预览、数据目录）。

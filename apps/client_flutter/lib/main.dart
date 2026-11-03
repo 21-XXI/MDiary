@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'app.dart';
 import 'core/app_logger.dart';
 import 'core/app_paths.dart';
+import 'core/file_drop_channel.dart';
 import 'data/attachment_repository.dart';
 import 'data/attachment_store.dart';
 import 'data/database.dart';
@@ -53,6 +54,26 @@ Future<void> main() async {
     );
     await state.bootstrap();
     runApp(MDiaryApp(state: state));
+    if (Platform.isWindows) {
+      // 拖拽导入：资源管理器 -> 窗口，文件挂到当前日记上。
+      FileDropChannel.install((paths) async {
+        final attached = await state.attachDroppedFiles(paths);
+        final messenger = rootMessengerKey.currentState;
+        if (messenger == null) return;
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                attached == 0
+                    ? '没有可用的文件（超限或被占用）'
+                    : '已把 $attached 个文件加到当前日记',
+              ),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+      });
+    }
   } catch (error, stack) {
     // 启动阶段的异常也要落盘，否则用户只能看到「打不开」
     final fallback = logger ?? AppLogger(resolveLogFile(''));

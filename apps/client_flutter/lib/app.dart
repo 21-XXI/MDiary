@@ -5,6 +5,10 @@ import 'features/home_page.dart';
 import 'state/app_scope.dart';
 import 'state/app_state.dart';
 
+/// 全局 SnackBar 出口：拖拽导入这类没有页面上下文的操作也能给用户反馈。
+final GlobalKey<ScaffoldMessengerState> rootMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
+
 class MDiaryApp extends StatelessWidget {
   const MDiaryApp({super.key, required this.state});
 
@@ -20,6 +24,7 @@ class MDiaryApp extends StatelessWidget {
           return MaterialApp(
             title: 'MDiary',
             debugShowCheckedModeBanner: false,
+            scaffoldMessengerKey: rootMessengerKey,
             theme: AppTheme.light(),
             darkTheme: AppTheme.dark(),
             themeMode: state.themeMode,

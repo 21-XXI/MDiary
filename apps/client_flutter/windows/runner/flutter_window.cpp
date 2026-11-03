@@ -1,8 +1,14 @@
 #include "flutter_window.h"
 
+#include <flutter/standard_method_codec.h>
+#include <shellapi.h>
+
 #include <optional>
+#include <string>
+#include <vector>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "utils.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -25,6 +31,15 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+
+  // Drag-and-drop import: accept files dropped from Explorer and forward the
+  // paths to Dart over "mdiary/drop".
+  drop_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(), "mdiary/drop",
+          &flutter::StandardMethodCodec::GetInstance());
+  DragAcceptFiles(GetHandle(), TRUE);
+
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -40,11 +55,33 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  DragAcceptFiles(GetHandle(), FALSE);
+  drop_channel_.reset();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
 
   Win32Window::OnDestroy();
+}
+
+void FlutterWindow::HandleDropFiles(HDROP drop) {
+  const UINT count = DragQueryFileW(drop, 0xFFFFFFFF, nullptr, 0);
+  flutter::EncodableList paths;
+  for (UINT index = 0; index < count; ++index) {
+    const UINT length = DragQueryFileW(drop, index, nullptr, 0);
+    std::wstring buffer(length + 1, L'\0');
+    DragQueryFileW(drop, index, buffer.data(), length + 1);
+    buffer.resize(length);
+    const std::string utf8 = Utf8FromUtf16(buffer.c_str());
+    if (!utf8.empty()) {
+      paths.emplace_back(utf8);
+    }
+  }
+  DragFinish(drop);
+  if (drop_channel_ != nullptr && !paths.empty()) {
+    drop_channel_->InvokeMethod(
+        "files", std::make_unique<flutter::EncodableValue>(paths));
+  }
 }
 
 LRESULT
@@ -59,6 +96,11 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     if (result) {
       return *result;
     }
+  }
+
+  if (message == WM_DROPFILES) {
+    HandleDropFiles(reinterpret_cast<HDROP>(wparam));
+    return 0;
   }
 
   switch (message) {

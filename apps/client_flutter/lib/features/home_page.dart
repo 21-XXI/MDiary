@@ -11,6 +11,7 @@ import '../ui/month_calendar.dart';
 import '../ui/widgets.dart';
 import 'entry_editor_page.dart';
 import 'settings_page.dart';
+import 'star_map/star_map_page.dart';
 import 'trash_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -166,7 +167,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
               ),
               const Spacer(),
-              IconButton(
+              _HeaderIconButton(
+                tooltip: '星图',
+                onPressed: _openStarMap,
+                icon: const Icon(Icons.hub_outlined),
+              ),
+              _HeaderIconButton(
                 tooltip: state.trashCount > 0
                     ? '回收站（${state.trashCount}）'
                     : '回收站',
@@ -177,7 +183,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   child: const Icon(Icons.delete_outline),
                 ),
               ),
-              IconButton(
+              _HeaderIconButton(
                 tooltip: '设置',
                 onPressed: () => _openPage(const SettingsPage()),
                 icon: const Icon(Icons.settings_outlined),
@@ -335,6 +341,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     Navigator.of(context)
         .push(MaterialPageRoute<void>(builder: (context) => page));
   }
+
+  /// 星图里点日记星 -> 带着那篇回来并选中，直接进入编辑。
+  Future<void> _openStarMap() async {
+    final entry = await Navigator.of(context).push<Entry>(
+      MaterialPageRoute<Entry>(builder: (context) => const StarMapPage()),
+    );
+    if (!mounted || entry == null) return;
+    await AppScope.of(context).select(entry);
+  }
 }
 
 class _ListItem {
@@ -344,6 +359,36 @@ class _ListItem {
 
   final String? dateHeader;
   final Entry? entry;
+}
+
+/// 左栏头部的小图标按钮：240 宽的窄栏里「新建 + 星图 + 回收站 + 设置」必须挤得下，
+/// 默认 IconButton 的 40~48 点击区会把这一行撑溢出，这里固定 32x32。
+class _HeaderIconButton extends StatelessWidget {
+  const _HeaderIconButton({
+    required this.tooltip,
+    required this.onPressed,
+    required this.icon,
+  });
+
+  final String tooltip;
+  final VoidCallback onPressed;
+  final Widget icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: icon,
+      iconSize: 20,
+      style: IconButton.styleFrom(
+        minimumSize: const Size(32, 32),
+        maximumSize: const Size(32, 32),
+        padding: EdgeInsets.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+  }
 }
 
 /// 数据没能放在默认目录时的常驻提示：不能让用户以为日记丢了。

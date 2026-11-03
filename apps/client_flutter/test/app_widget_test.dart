@@ -15,7 +15,9 @@ import 'package:mdiary/data/database.dart';
 import 'package:mdiary/data/entry_repository.dart';
 import 'package:mdiary/data/markdown_io.dart';
 import 'package:mdiary/data/meta_repository.dart';
+import 'package:mdiary/data/models.dart';
 import 'package:mdiary/features/settings_page.dart';
+import 'package:mdiary/features/star_map/star_map_layout.dart';
 import 'package:mdiary/state/app_state.dart';
 import 'package:mdiary/ui/markdown_view.dart';
 import 'package:mdiary/ui/month_calendar.dart';
@@ -549,6 +551,69 @@ void main() {
       reason: '8 号一篇 + 今天一篇，重复点 8 号不应再加',
     );
     expect(state.calendarMonth, DateTime(month.year, month.month));
+  }, skip: skipWidgetTests);
+
+  testWidgets('星图：展示日记与共用附件，点日记星回到编辑器', (tester) async {
+    final first = state.entryRepo.create(
+      deviceId: 'dev',
+      date: DateTime(2026, 11, 1),
+      title: '第一篇',
+    );
+    final second = state.entryRepo.create(
+      deviceId: 'dev',
+      date: DateTime(2026, 11, 2),
+      title: '第二篇',
+    );
+    await state.refresh();
+    // 两篇日记索引同一个附件（同 sha）——只写库，不碰磁盘，避免 widget 测试里等真实 IO
+    for (final entry in <Entry>[first, second]) {
+      state.attachmentRepo.insert(
+        entryId: entry.id,
+        sha256: 'deadbeef' * 8,
+        filename: 'shot.png',
+        mime: 'image/png',
+        sizeBytes: 4,
+      );
+    }
+
+    await pumpApp(tester);
+    await tester.tap(find.byTooltip('星图'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('星图'), findsOneWidget);
+    for (final label in <String>['全部', '年', '月', '周']) {
+      expect(find.text(label), findsWidgets, reason: '缺少「$label」分组');
+    }
+    expect(tester.takeException(), isNull);
+
+    final map = buildStarMap(
+      entries: state.allEntries,
+      attachments: state.allAttachments,
+      period: StarPeriod.month,
+    );
+    expect(map.attachments.single.refCount, 2);
+
+    // 点第一颗日记星 -> 回到主界面并选中它
+    final viewer = find.byType(InteractiveViewer);
+    final origin = tester.getTopLeft(viewer);
+    await tester.tapAt(origin + map.entries.first.center);
+    await tester.pumpAndSettle();
+
+    expect(find.text('星图'), findsNothing, reason: '应已返回主界面');
+    expect(state.selected?.id, map.entries.first.entry.id);
+  }, skip: skipWidgetTests);
+
+  testWidgets('星图：切换全部/年/月/周不报错', (tester) async {
+    await state.createEntry(date: DateTime(2026, 11, 1));
+    await pumpApp(tester);
+    await tester.tap(find.byTooltip('星图'));
+    await tester.pumpAndSettle();
+
+    for (final label in <String>['周', '年', '全部']) {
+      await tester.tap(find.text(label).first);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: '切到「$label」时异常');
+    }
   }, skip: skipWidgetTests);
 }
 
