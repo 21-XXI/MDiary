@@ -18,6 +18,7 @@ import 'package:mdiary/data/meta_repository.dart';
 import 'package:mdiary/features/settings_page.dart';
 import 'package:mdiary/state/app_state.dart';
 import 'package:mdiary/ui/markdown_view.dart';
+import 'package:mdiary/ui/month_calendar.dart';
 import 'package:mdiary/ui/widgets.dart';
 import 'package:sqlite3/open.dart';
 
@@ -474,6 +475,80 @@ void main() {
     // 放掉 SnackBar 的自动关闭计时器
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
+  }, skip: skipWidgetTests);
+
+  testWidgets('左侧日历：切到上个月点 15 号，新建那天的日记', (tester) async {
+    await pumpApp(tester);
+    final calendar = find.byType(MonthCalendar);
+    expect(calendar, findsOneWidget);
+
+    await tester.tap(
+      find.descendant(of: calendar, matching: find.byTooltip('上个月')),
+    );
+    await tester.pumpAndSettle();
+    final month = state.calendarMonth;
+
+    await tester.tap(
+      find.descendant(of: calendar, matching: find.text('15')).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(state.selected, isNotNull);
+    expect(state.selected!.entryDate, DateTime(month.year, month.month, 15));
+    expect(state.entryRepo.count(), 1);
+    expect(state.selectedDate, DateTime(month.year, month.month, 15));
+  }, skip: skipWidgetTests);
+
+  testWidgets('左侧日历：那天已有日记时再次点开不会重复新建', (tester) async {
+    await pumpApp(tester);
+    final calendar = find.byType(MonthCalendar);
+
+    await tester.tap(
+      find.descendant(of: calendar, matching: find.byTooltip('上个月')),
+    );
+    await tester.pumpAndSettle();
+    final month = state.calendarMonth;
+
+    await tester.tap(
+      find.descendant(of: calendar, matching: find.text('8')).first,
+    );
+    await tester.pumpAndSettle();
+    final firstId = state.selected!.id;
+
+    // 写点内容：空草稿在切换日期时会被清理掉，那就测不出「重复新建」了
+    await tester.enterText(find.byKey(const Key('editor-title')), '八号');
+    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pumpAndSettle();
+
+    // 切到今天，再切回上个月 8 号
+    await tester.tap(find.text('今天'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('editor-title')), '今天写的');
+    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(MonthCalendar),
+        matching: find.byTooltip('上个月'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(MonthCalendar),
+        matching: find.text('8'),
+      ).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(state.selected!.id, firstId, reason: '应打开原来那篇，而不是新建');
+    expect(state.selected!.title, '八号');
+    expect(
+      state.entryRepo.count(),
+      2,
+      reason: '8 号一篇 + 今天一篇，重复点 8 号不应再加',
+    );
+    expect(state.calendarMonth, DateTime(month.year, month.month));
   }, skip: skipWidgetTests);
 }
 

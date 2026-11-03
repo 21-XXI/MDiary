@@ -155,6 +155,31 @@ class EntryRepository {
     return (rows.first['c'] as int?) ?? 0;
   }
 
+  /// 某一天最近更新的一篇（日历点选时用：那天已有日记就打开它）。
+  Entry? findLatestOn(DateTime day) {
+    final start = DateTime(day.year, day.month, day.day);
+    final rows = _raw.select(
+      'SELECT * FROM entries WHERE deleted_at IS NULL AND entry_date = ? '
+      'ORDER BY updated_at DESC LIMIT 1',
+      <Object?>[start.millisecondsSinceEpoch],
+    );
+    if (rows.isEmpty) return null;
+    return Entry.fromMap(Map<String, Object?>.from(rows.first));
+  }
+
+  /// 有日记的日期集合（日历上的小圆点）。
+  Set<DateTime> datesWithEntries() {
+    final rows = _raw.select(
+      'SELECT DISTINCT entry_date FROM entries WHERE deleted_at IS NULL',
+    );
+    return rows
+        .map(
+          (row) => DateTime.fromMillisecondsSinceEpoch(row['entry_date'] as int),
+        )
+        .map((date) => DateTime(date.year, date.month, date.day))
+        .toSet();
+  }
+
   static String _escapeLike(String input) => input
       .replaceAll('\\', '\\\\')
       .replaceAll('%', '\\%')

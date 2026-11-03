@@ -107,6 +107,13 @@ class AppState extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.system;
   double _editorFontSize = 16;
 
+  DateTime _selectedDate = DateTime.now();
+  DateTime _calendarMonth = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+  );
+  Set<DateTime> _markedDates = <DateTime>{};
+
   Timer? _searchDebounce;
   Timer? _saveDebounce;
 
@@ -123,6 +130,15 @@ class AppState extends ChangeNotifier {
   int get trashCount => _trashCount;
   ThemeMode get themeMode => _themeMode;
   double get editorFontSize => _editorFontSize;
+
+  /// 日历当前选中的那天。
+  DateTime get selectedDate => _selectedDate;
+
+  /// 日历当前显示的月份（1 号）。
+  DateTime get calendarMonth => _calendarMonth;
+
+  /// 有日记的日期（日历上的小圆点）。
+  Set<DateTime> get markedDates => Set<DateTime>.unmodifiable(_markedDates);
 
   /// 附件根目录（设置页展示/打开用）。
   String get attachmentsPath => store.directory.path;
@@ -142,6 +158,10 @@ class AppState extends ChangeNotifier {
         .clamp(12, 28);
     _loading = false;
     await refresh();
+    // 日历默认停在「最新的一天」：今天与最新一篇里更晚的那个。
+    _selectedDate = _latestDay();
+    _calendarMonth = DateTime(_selectedDate.year, _selectedDate.month);
+    notifyListeners();
   }
 
   Future<void> refresh() async {
@@ -150,6 +170,7 @@ class AppState extends ChangeNotifier {
       ..addAll(entryRepo.query(keyword: _query));
     _trashCount = entryRepo.count(deleted: true);
     _attachmentCounts = attachmentRepo.countsByEntry();
+    _markedDates = entryRepo.datesWithEntries();
     if (_selected != null) {
       final id = _selected!.id;
       Entry? next;
@@ -185,6 +206,11 @@ class AppState extends ChangeNotifier {
     _pendingTitle = entry?.title ?? '';
     _pendingBody = entry?.bodyMd ?? '';
     _status = SaveStatus.idle;
+    // 列表里点开某篇时，日历跟着跳到那天，两个入口不会互相打架。
+    if (entry != null) {
+      _selectedDate = _dayOf(entry.entryDate);
+      _calendarMonth = DateTime(_selectedDate.year, _selectedDate.month);
+    }
     notifyListeners();
   }
 
@@ -216,6 +242,49 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     return entry;
   }
+
+  // ───────────────────────────── 日历 ─────────────────────────────
+
+  /// 切到某个月（只改显示，不建日记）。
+  void showMonth(DateTime month) {
+    _calendarMonth = DateTime(month.year, month.month);
+    notifyListeners();
+  }
+
+  /// 点日历里的某天：那天已有日记就打开最近改过的一篇，没有就新建。
+  Future<Entry> selectDay(DateTime day) async {
+    final target = _dayOf(day);
+    final existing = entryRepo.findLatestOn(target);
+    if (existing != null) {
+      await select(existing);
+      _selectedDate = target;
+      _calendarMonth = DateTime(target.year, target.month);
+      notifyListeners();
+      return existing;
+    }
+    final entry = await createEntry(date: target);
+    // createEntry 把新条目插到列表最前面；按日期重排，历史日期才不会跑到今天上面。
+    await refresh();
+    _selectedDate = target;
+    _calendarMonth = DateTime(target.year, target.month);
+    notifyListeners();
+    return entry;
+  }
+
+  /// 日历初始选中日：今天与最新一篇里更晚的那天（都按 00:00 比较）。
+  DateTime _latestDay() {
+    final today = _dayOf(DateTime.now());
+    DateTime? latest;
+    for (final entry in _entries) {
+      final day = _dayOf(entry.entryDate);
+      if (latest == null || day.isAfter(latest)) latest = day;
+    }
+    if (latest == null) return today;
+    return latest.isAfter(today) ? latest : today;
+  }
+
+  static DateTime _dayOf(DateTime value) =>
+      DateTime(value.year, value.month, value.day);
 
   /// 编辑器每次输入调用；800ms 防抖后落库。
   void draftChanged({String? title, String? body, bool immediate = false}) {

@@ -7,6 +7,7 @@ import '../core/formatters.dart';
 import '../data/models.dart';
 import '../state/app_scope.dart';
 import '../state/app_state.dart';
+import '../ui/month_calendar.dart';
 import '../ui/widgets.dart';
 import 'entry_editor_page.dart';
 import 'settings_page.dart';
@@ -133,6 +134,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return Column(
       children: <Widget>[
         _buildHeader(context, state),
+        const Divider(height: 1),
+        MonthCalendar(
+          month: state.calendarMonth,
+          selectedDate: state.selectedDate,
+          markedDates: state.markedDates,
+          today: DateTime.now(),
+          onSelect: (day) => state.selectDay(day),
+          onMonthChanged: state.showMonth,
+        ),
         const Divider(height: 1),
         Expanded(child: _buildEntryList(context, state)),
       ],

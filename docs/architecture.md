@@ -34,6 +34,7 @@ apps/client_flutter/
       trash_page.dart         回收站
       settings_page.dart      外观、数据、导入导出、关于
     ui/
+      month_calendar.dart     左栏月历（7 列紧凑网格，点日期 = 打开/新建当天日记）
       markdown_view.dart      Markdown 渲染 + 本地附件解析
       widgets.dart            列表项、保存指示、空状态
   test/                       纯逻辑单测
@@ -95,6 +96,16 @@ v2.0 同步时按 hash 上传即可幂等。代价是「文件已写、记录未
 ### 3.2 新建与删除
 新建：立即插入空条目（草稿），`entry_date` 取当天 00:00。空草稿离开时若标题正文皆空则物理删除，避免垃圾条目。
 删除：`deleted_at` 置位（进回收站）；回收站「彻底删除」→ 删附件记录 → 触发 GC → 删条目。
+
+### 3.2.1 日历
+左栏 `MonthCalendar` 只负责画格子（月/选中日/有日记的日期，来自 `EntryRepository.datesWithEntries()`；
+`refresh()` 时刷新）。点某天走 `AppState.selectDay()`：
+`EntryRepository.findLatestOn(day)` 命中就 `select()` 打开最近更新的一篇，没命中就
+`createEntry(date: day)` 并 `refresh()` 按日期重排；列表里点开某篇时反过来把日历跳到它的月份。
+初始选中日 = 今天与最新一篇里更晚的那天（`_latestDay()`）。
+
+> 图标坑：release 构建会做图标树摇，只有「常量 `IconData` 直接写在 `Icon()` 构造处」才会保留。
+> 把 `Icons.x` 当参数传进包装组件会被裁掉，debug 正常、release 变空白按钮（`ui/month_calendar.dart` 有注释）。
 
 ### 3.3 附件
 1. `file_picker` 选择文件 → 读字节 → sha256；

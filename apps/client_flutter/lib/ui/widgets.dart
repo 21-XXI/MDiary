@@ -228,29 +228,36 @@ class EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // 左栏加了日历后，小窗口里留给空状态的高度可能不够；可滚动就不会溢出。
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(
-            icon,
-            size: 48,
-            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-          ),
-          const SizedBox(height: 12),
-          Text(title, style: theme.textTheme.titleMedium),
-          if (description != null) ...<Widget>[
-            const SizedBox(height: 6),
-            Text(
-              description!,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              icon,
+              size: 48,
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
             ),
+            const SizedBox(height: 12),
+            Text(title, style: theme.textTheme.titleMedium),
+            if (description != null) ...<Widget>[
+              const SizedBox(height: 6),
+              Text(
+                description!,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+            if (action != null) ...<Widget>[
+              const SizedBox(height: 16),
+              action!,
+            ],
           ],
-          if (action != null) ...<Widget>[const SizedBox(height: 16), action!],
-        ],
+        ),
       ),
     );
   }
