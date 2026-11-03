@@ -25,6 +25,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
   AppLifecycleListener? _lifecycleListener;
+  AppState? _boundState;
 
   @override
   void initState() {
@@ -42,7 +43,34 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final state = AppScope.of(context);
+    if (identical(_boundState, state)) return;
+    _boundState?.removeListener(_onStateChanged);
+    _boundState = state;
+    state.addListener(_onStateChanged);
+  }
+
+  /// 没有页面上下文的操作（比如拖拽导入）通过一次性提示反馈给用户。
+  void _onStateChanged() {
+    final state = _boundState;
+    if (state == null) return;
+    final message = state.takeToast();
+    if (message == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
+        );
+    });
+  }
+
+  @override
   void dispose() {
+    _boundState?.removeListener(_onStateChanged);
     _lifecycleListener?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
@@ -198,7 +226,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             textInputAction: TextInputAction.search,
             decoration: InputDecoration(
               isDense: true,
-              hintText: '搜索标题或正文（Ctrl+F）',
+              hintText: '搜索标题、正文或标签（Ctrl+F）',
               hintStyle: theme.textTheme.bodySmall,
               prefixIcon: const Icon(Icons.search, size: 18),
               prefixIconConstraints: const BoxConstraints(minWidth: 36),
@@ -272,6 +300,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           entry: entry,
           selected: state.selected?.id == entry.id,
           attachmentCount: state.attachmentCountOf(entry.id),
+          tags: state.tagsOf(entry.id),
           onTap: () => state.select(entry),
           onMenu: (position) => _showEntryMenu(context, state, entry, position),
         );

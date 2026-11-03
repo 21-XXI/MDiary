@@ -12,6 +12,7 @@ import 'data/database.dart';
 import 'data/entry_repository.dart';
 import 'data/markdown_io.dart';
 import 'data/meta_repository.dart';
+import 'data/tag_repository.dart';
 import 'state/app_state.dart';
 
 Future<void> main() async {
@@ -37,6 +38,7 @@ Future<void> main() async {
     final entryRepo = EntryRepository(db);
     final attachmentRepo = AttachmentRepository(db);
     final metaRepo = MetaRepository(db);
+    final tagRepo = TagRepository(db);
 
     final state = AppState(
       db: db,
@@ -48,7 +50,9 @@ Future<void> main() async {
         entries: entryRepo,
         attachments: attachmentRepo,
         store: store,
+        tags: tagRepo,
       ),
+      tagRepository: tagRepo,
       dataRootPath: AppPaths.root.path,
       dataRootNotice: AppPaths.fallbackReason,
     );
@@ -58,20 +62,9 @@ Future<void> main() async {
       // 拖拽导入：资源管理器 -> 窗口，文件挂到当前日记上。
       FileDropChannel.install((paths) async {
         final attached = await state.attachDroppedFiles(paths);
-        final messenger = rootMessengerKey.currentState;
-        if (messenger == null) return;
-        messenger
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Text(
-                attached == 0
-                    ? '没有可用的文件（超限或被占用）'
-                    : '已把 $attached 个文件加到当前日记',
-              ),
-              duration: const Duration(seconds: 3),
-            ),
-          );
+        state.notifyUser(
+          attached == 0 ? '没有可用的文件（超限或被占用）' : '已把 $attached 个文件加到当前日记',
+        );
       });
     }
   } catch (error, stack) {

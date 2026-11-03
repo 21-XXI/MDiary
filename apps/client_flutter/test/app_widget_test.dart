@@ -202,7 +202,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 900));
     await tester.pumpAndSettle();
 
-    final searchField = find.widgetWithText(TextField, '搜索标题或正文（Ctrl+F）');
+    final searchField = find.widgetWithText(TextField, '搜索标题、正文或标签（Ctrl+F）');
     await tester.enterText(searchField, '龙井');
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
@@ -551,6 +551,29 @@ void main() {
       reason: '8 号一篇 + 今天一篇，重复点 8 号不应再加',
     );
     expect(state.calendarMonth, DateTime(month.year, month.month));
+  }, skip: skipWidgetTests);
+
+  testWidgets('标签：编辑器里添加后列表与搜索都能看到', (tester) async {
+    await pumpApp(tester);
+    await createEntry(tester);
+
+    await tester.tap(find.text('添加标签'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, '旅行, 杭州');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    final id = state.selected!.id;
+    expect(state.tagsOf(id).toSet(), <String>{'旅行', '杭州'});
+    expect(find.text('#旅行'), findsWidgets);
+    expect(find.text('#杭州'), findsWidgets);
+    expect(find.text('编辑标签'), findsOneWidget);
+
+    // 搜索框输入标签名也能过滤出这一篇
+    await tester.enterText(find.byType(TextField).first, '杭州');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(state.entries, hasLength(1));
   }, skip: skipWidgetTests);
 
   testWidgets('星图：展示日记与共用附件，点日记星回到编辑器', (tester) async {

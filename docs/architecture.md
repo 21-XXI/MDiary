@@ -24,6 +24,7 @@ apps/client_flutter/
       attachment_repository.dart
       meta_repository.dart    key-value 配置
       attachment_store.dart   内容寻址附件库（sha256）
+      tag_repository.dart     标签多对多（tags / entry_tags，含孤儿标签清理）
       markdown_document.dart  front matter 解析/生成、文件名规范化（纯函数，可单测）
       markdown_io.dart        .md 导出/导入（附件搬运）
       data_root_migration.dart 数据目录迁移：逐文件复制 + 大小校验 + 删旧目录
@@ -134,8 +135,14 @@ v2.0 同步时按 hash 上传即可幂等。代价是「文件已写、记录未
 选目录 → 递归 `*.md` → 解析 front matter（缺失则用文件名和 mtime）→ 正文中相对图片（`assets/…` 或 `./img/…`）存在则复制进附件库并改写为 `assets/<hash>.<ext>` → 建条目。导入按「文件路径 + 内容 hash」去重，重复导入不产生副本。
 
 ### 3.6 搜索
-v1.0 用 `LIKE '%kw%'` 覆盖标题与正文（中文子串匹配准确，1k 篇量级毫秒级）。
-FTS5 trigram 作为 v1.1 优化项：届时只替换 `EntryRepository.search` 的实现，界面不变。
+v1.0 用 `LIKE '%kw%'` 覆盖标题、正文与**标签名**（`id IN (SELECT et.entry_id FROM entry_tags et
+JOIN tags t ON t.id = et.tag_id WHERE t.name LIKE ?)`；中文子串匹配准确，1k 篇量级毫秒级）。
+FTS5 trigram 作为 v1.1 优化项：届时只替换 `EntryRepository.query` 的实现，界面不变。
+
+### 3.6.1 标签
+`TagRepository.setTags(entryId, names)` 覆盖式写入：去空白、忽略大小写去重、自动清掉没人引用的标签；
+`AppState.refresh()` 一次查出 `entry_id -> [name]` 供列表与编辑器渲染。
+导出写进 front matter 的 `tags: [...]`，导入时 `setTags` 落库。
 
 ### 3.7 数据目录切换
 设置页「更改数据目录」→ 原生目录选择器 → 校验目标（必须是空目录、不能与当前目录嵌套）→

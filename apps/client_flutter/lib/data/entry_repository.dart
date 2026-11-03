@@ -21,9 +21,12 @@ class EntryRepository {
     if (kw.isNotEmpty) {
       final pattern = '%${_escapeLike(kw)}%';
       sql.write(
-        " AND (title LIKE ? ESCAPE '\\' OR body_md LIKE ? ESCAPE '\\')",
+        " AND (title LIKE ? ESCAPE '\\' OR body_md LIKE ? ESCAPE '\\'"
+        ' OR id IN (SELECT et.entry_id FROM entry_tags et'
+        " JOIN tags t ON t.id = et.tag_id WHERE t.name LIKE ? ESCAPE '\\'))",
       );
       params
+        ..add(pattern)
         ..add(pattern)
         ..add(pattern);
     }

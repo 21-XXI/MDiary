@@ -7,6 +7,7 @@ import 'attachment_store.dart';
 import 'entry_repository.dart';
 import 'markdown_document.dart';
 import 'models.dart';
+import 'tag_repository.dart';
 
 class ExportResult {
   ExportResult({
@@ -41,11 +42,15 @@ class MarkdownIo {
     required this.entries,
     required this.attachments,
     required this.store,
+    this.tags,
   });
 
   final EntryRepository entries;
   final AttachmentRepository attachments;
   final AttachmentStore store;
+
+  /// 标签仓储；为 null 时导出不写 tags、导入不落标签（老调用方兼容）。
+  final TagRepository? tags;
 
   /// 导出单篇到 [targetDir]，返回写出的 .md 路径。
   Future<String> exportEntry(Entry entry, String targetDir) async {
@@ -55,11 +60,12 @@ class MarkdownIo {
     final content = buildMarkdownDocument(
       title: entry.title.trim().isEmpty ? '无标题' : entry.title.trim(),
       date: entry.entryDate,
+      tags: tags?.tagsOf(entry.id) ?? const <String>[],
       body: entry.bodyMd,
     );
     final target = _uniquePath(dir, safeFileName(entry.entryDate, entry.title));
     final file = File(target);
-    await file.writeAsString(content, flush: true);
+    await _writeAtomic(file, content);
     return file.path;
   }
 
@@ -75,6 +81,7 @@ class MarkdownIo {
       final content = buildMarkdownDocument(
         title: entry.title.trim().isEmpty ? '无标题' : entry.title.trim(),
         date: entry.entryDate,
+        tags: tags?.tagsOf(entry.id) ?? const <String>[],
         body: entry.bodyMd,
       );
       final target = _uniquePath(
@@ -82,7 +89,7 @@ class MarkdownIo {
         safeFileName(entry.entryDate, entry.title),
       );
       final file = File(target);
-      await file.writeAsString(content, flush: true);
+      await _writeAtomic(file, content);
       files.add(file.path);
     }
     return ExportResult(
@@ -156,6 +163,7 @@ class MarkdownIo {
           title: doc.title ?? fallbackTitle,
           body: body,
         );
+        if (doc.tags.isNotEmpty) tags?.setTags(entry.id, doc.tags);
 
         final storedRefs = <String, StoredBlob>{};
         for (final rawRef in extractLocalReferences(body)) {
@@ -200,8 +208,15 @@ class MarkdownIo {
     return ImportResult(imported: imported, skipped: skipped, errors: errors);
   }
 
-  static String _decodeRef(String rawRef) {
-    var value = rawRef;
+  /// 原子写：先写 `.tmp` 再改名，避免导出中途崩溃留下半截 .md。
+  static Future<void> _writeAtomic(File file, String content) async {
+    final temp = File('${file.path}.tmp');
+    await temp.writeAsString(content, flush: true);
+    if (await file.exists()) await file.delete();
+    await temp.rename(file.path);
+  }
+
+  static String _decodeRef(String rawRef) {    var value = rawRef;
     if (value.startsWith('<') && value.endsWith('>')) {
       value = value.substring(1, value.length - 1);
     }

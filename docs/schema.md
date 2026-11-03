@@ -40,10 +40,14 @@
 `%APPDATA%\MDiary\attachments\<sha 前两位>\<sha><ext>`，
 同一内容多次插入只存一份（内容寻址去重）。
 
-## tags / entry_tags（v1.0 预留）
+## tags / entry_tags（v1.0 标签）
 
-`tags(id, name UNIQUE)` 与 `entry_tags(entry_id, tag_id)` 已建表，v1.0 界面暂未开放编辑，
-导入时 front matter 的 `tags` 会被读取但不落库（v1.1 补齐标签视图）。
+`tags(id, name UNIQUE)` 与 `entry_tags(entry_id, tag_id)` 已启用：
+
+- 编辑器标题下方的「添加/编辑标签」写入，逗号/空格分隔，去重忽略大小写；
+- 搜索框同时匹配**标题、正文、标签名**（`entry_tags JOIN tags` 子查询）；
+- 导出写进 front matter 的 `tags: [a, b]`，导入时读回并落库；
+- 没有任何日记引用的标签会被自动清掉，避免越攒越多。
 
 ## app_meta（键值配置）
 

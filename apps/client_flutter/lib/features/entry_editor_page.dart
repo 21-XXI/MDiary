@@ -196,6 +196,59 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
     );
   }
 
+  Future<void> _editTags() async {
+    final state = _state;
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (dialogContext) =>
+          _TagEditDialog(initial: state.tagsOf(widget.entry.id)),
+    );
+    if (result == null || !mounted) return;
+    await state.setTags(widget.entry, result);
+    if (mounted) setState(() {});
+  }
+
+  Widget _buildTagStrip(BuildContext context) {
+    final theme = Theme.of(context);
+    final tags = _state.tagsOf(widget.entry.id);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: <Widget>[
+          for (final tag in tags)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.tertiaryContainer.withValues(
+                  alpha: 0.5,
+                ),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '#$tag',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.tertiary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          TextButton.icon(
+            onPressed: _editTags,
+            icon: const Icon(Icons.sell_outlined, size: 16),
+            label: Text(tags.isEmpty ? '添加标签' : '编辑标签'),
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildToolbar(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
@@ -285,6 +338,7 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
               ],
             ),
           ),
+          _buildTagStrip(context),
         ],
       ),
     );
@@ -413,6 +467,63 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 标签编辑对话框：自己管理 TextEditingController，
+/// 避免「对话框还在退场动画里，controller 已经被外部 dispose」。
+class _TagEditDialog extends StatefulWidget {
+  const _TagEditDialog({required this.initial});
+
+  final List<String> initial;
+
+  @override
+  State<_TagEditDialog> createState() => _TagEditDialogState();
+}
+
+class _TagEditDialogState extends State<_TagEditDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial.join(' '),
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// 逗号/空格/顿号分隔，允许用户顺手敲 `#标签`。
+  static List<String> parse(String raw) => raw
+      .split(RegExp(r'[,，、\s]+'))
+      .map((tag) => tag.trim().replaceAll(RegExp(r'^#+'), '').trim())
+      .where((tag) => tag.isNotEmpty)
+      .toList(growable: false);
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('编辑标签'),
+      content: TextField(
+        key: const Key('tag-input'),
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(
+          hintText: '空格或逗号分隔，例如：旅行 杭州',
+          helperText: '标签会写进导出 .md 的 front matter，也能在搜索框里搜到',
+        ),
+        onSubmitted: (value) => Navigator.of(context).pop(parse(value)),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(parse(_controller.text)),
+          child: const Text('保存'),
+        ),
+      ],
     );
   }
 }

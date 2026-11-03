@@ -16,6 +16,7 @@ class AppDatabase {
   factory AppDatabase.open(String path) {
     final db = AppDatabase(sqlite3.open(path));
     db._applyPragmas();
+    db._backupBeforeMigration(path);
     db._migrate();
     return db;
   }
@@ -48,6 +49,29 @@ class AppDatabase {
     } catch (error) {
       raw.execute('ROLLBACK');
       rethrow;
+    }
+  }
+
+  /// 升级 schema 前先落一份一致性快照（`VACUUM INTO`，含 WAL 里的内容）。
+  ///
+  /// 只在「库里已有旧版本数据」时触发；备份失败直接抛错 —— 宁可打不开，
+  /// 也不要让用户的数据在没有备份的情况下被迁移写坏。
+  void _backupBeforeMigration(String path) {
+    final current =
+        raw.select('PRAGMA user_version').first['user_version'] as int;
+    if (current >= schemaVersion) return;
+    // 全新空库（没有 entries 表）没什么可备份的，跳过。
+    final hasSchema = raw
+        .select(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'entries'",
+        )
+        .isNotEmpty;
+    if (!hasSchema) return;
+    final backup = '$path.v$current.bak';
+    try {
+      raw.execute("VACUUM INTO '${backup.replaceAll("'", "''")}'");
+    } catch (error) {
+      throw StateError('迁移前备份失败（$backup）：$error');
     }
   }
 

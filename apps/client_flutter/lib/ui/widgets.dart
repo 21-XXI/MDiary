@@ -12,6 +12,7 @@ class EntryListTile extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.attachmentCount = 0,
+    this.tags = const <String>[],
     this.onMenu,
   });
 
@@ -19,6 +20,9 @@ class EntryListTile extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final int attachmentCount;
+
+  /// 日记标签（只展示前两个，避免把列表项撑高）。
+  final List<String> tags;
 
   /// 右键/长按菜单（置顶、删除等由列表页提供）。
   final void Function(Offset globalPosition)? onMenu;
@@ -105,6 +109,29 @@ class EntryListTile extends StatelessWidget {
                   height: 1.4,
                 ),
               ),
+              if (tags.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 6,
+                  children: <Widget>[
+                    for (final tag in tags.take(2))
+                      Text(
+                        '#$tag',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.tertiary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    if (tags.length > 2)
+                      Text(
+                        '+${tags.length - 2}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 4),
               Row(
                 children: <Widget>[

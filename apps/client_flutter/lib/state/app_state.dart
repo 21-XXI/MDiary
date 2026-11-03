@@ -16,6 +16,7 @@ import '../data/entry_repository.dart';
 import '../data/markdown_io.dart';
 import '../data/meta_repository.dart';
 import '../data/models.dart';
+import '../data/tag_repository.dart';
 
 enum SaveStatus { idle, dirty, saving, saved, error }
 
@@ -73,13 +74,16 @@ class AppState extends ChangeNotifier {
     DirectoryPicker? directoryPicker,
     this.dataRootPath = '',
     this.dataRootNotice,
+    TagRepository? tagRepository,
   }) : _filePicker = filePicker ?? _defaultFilePicker,
-       _directoryPicker = directoryPicker ?? _defaultDirectoryPicker;
+       _directoryPicker = directoryPicker ?? _defaultDirectoryPicker,
+       tagRepo = tagRepository ?? TagRepository(db);
 
   AppDatabase db;
   EntryRepository entryRepo;
   AttachmentRepository attachmentRepo;
   MetaRepository metaRepo;
+  TagRepository tagRepo;
   AttachmentStore store;
   MarkdownIo markdownIo;
 
@@ -114,6 +118,7 @@ class AppState extends ChangeNotifier {
   bool _dirtyDraft = false;
   int _trashCount = 0;
   Map<String, int> _attachmentCounts = const <String, int>{};
+  Map<String, List<String>> _tagsByEntry = const <String, List<String>>{};
   ThemeMode _themeMode = ThemeMode.system;
   double _editorFontSize = 16;
 
@@ -130,6 +135,7 @@ class AppState extends ChangeNotifier {
   String? _pendingId;
   String _pendingTitle = '';
   String _pendingBody = '';
+  String? _pendingToast;
 
   List<Entry> get entries => List<Entry>.unmodifiable(_entries);
   Entry? get selected => _selected;
@@ -159,6 +165,33 @@ class AppState extends ChangeNotifier {
   /// 全库附件索引关系（星图用）。
   List<Attachment> get allAttachments => attachmentRepo.all();
 
+  /// 某篇日记的标签。
+  List<String> tagsOf(String entryId) =>
+      _tagsByEntry[entryId] ?? const <String>[];
+
+  /// 全库标签名（设置页/建议用）。
+  List<String> get allTagNames => tagRepo.allNames();
+
+  /// 覆盖式设置标签；保存后刷新列表（标签也参与搜索）。
+  Future<void> setTags(Entry entry, List<String> names) async {
+    tagRepo.setTags(entry.id, names);
+    await refresh();
+    notifyListeners();
+  }
+
+  /// 给用户一条一次性提示（拖拽导入这类没有页面上下文的操作用）。
+  void notifyUser(String message) {
+    _pendingToast = message;
+    notifyListeners();
+  }
+
+  /// 取走待显示的提示（取过即清空）。
+  String? takeToast() {
+    final message = _pendingToast;
+    _pendingToast = null;
+    return message;
+  }
+
   Future<void> bootstrap() async {
     deviceId = metaRepo.get('device_id') ?? '';
     if (deviceId.isEmpty) {
@@ -186,6 +219,7 @@ class AppState extends ChangeNotifier {
       ..addAll(entryRepo.query(keyword: _query));
     _trashCount = entryRepo.count(deleted: true);
     _attachmentCounts = attachmentRepo.countsByEntry();
+    _tagsByEntry = tagRepo.allTagsByEntry();
     _markedDates = entryRepo.datesWithEntries();
     if (_selected != null) {
       final id = _selected!.id;
@@ -552,6 +586,7 @@ class AppState extends ChangeNotifier {
     entryRepo = EntryRepository(database);
     attachmentRepo = AttachmentRepository(database);
     metaRepo = MetaRepository(database);
+    tagRepo = TagRepository(database);
     store = AttachmentStore(Directory(p.join(rootPath, 'attachments')));
     markdownIo = MarkdownIo(
       entries: entryRepo,

@@ -16,7 +16,7 @@
 
 | # | 问题 | 建议 |
 |---|---|---|
-| B1 | 附件只能点按钮选 | 用 `desktop_drop` 支持拖拽；剪贴板粘贴图片需 `pasteboard` 类插件 |
+| B1 | 附件只能点按钮选 / 拖拽 | 拖拽已用 runner 原生 `WM_DROPFILES` 实现（不引插件）；**剪贴板粘贴截图仍未做**，需读 CF_DIB/CF_BITMAP 编码 PNG（GDI+ 或 WIC） |
 | B2 | 回收站只能逐条删除 | 增加「清空回收站」批量操作（沿用 `purgeEntry` 的 GC 逻辑） |
 | B3 | 窗口尺寸/位置不记忆 | 退出时把 `window_manager` 的 bounds 存入 `app_meta`，启动恢复 |
 | B4 | 无最小窗口尺寸 | 窗口可缩到极小，标题栏几乎无法点击；可在 runner 的 `WM_GETMINMAXINFO` 限制 720×520 |
