@@ -38,6 +38,10 @@ class FlutterWindow : public Win32Window {
   // Drag-and-drop import (Windows desktop only).
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       drop_channel_;
+
+  // Clipboard image read, encoded as PNG (paste screenshot, Windows only).
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      clipboard_channel_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

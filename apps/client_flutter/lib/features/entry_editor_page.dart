@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/formatters.dart';
 import '../core/theme.dart';
@@ -80,24 +81,49 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
     try {
       final attached = await _state.pickAttachment(widget.entry);
       if (attached == null || !mounted) return;
-      final link = '${attached.markdownLink}\n';
-      final selection = _bodyController.selection;
-      final text = _bodyController.text;
-      final start = selection.isValid ? selection.start : text.length;
-      final end = selection.isValid ? selection.end : text.length;
-      final next = text.replaceRange(start, end, link);
-      _bodyController.value = TextEditingValue(
-        text: next,
-        selection: TextSelection.collapsed(offset: start + link.length),
-      );
-      _state.draftChanged(body: next);
+      _insertMarkdown(attached.markdownLink);
       setState(_reloadAttachments);
-      _bodyFocus.requestFocus();
     } on Object catch (error) {
       if (mounted) _showMessage('添加附件失败：$error');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// 粘贴截图（Windows）：剪贴板里是图片就落成附件并插入引用。
+  Future<void> _pasteScreenshot() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final attached = await _state.pasteClipboardImage(widget.entry);
+      if (!mounted) return;
+      if (attached == null) {
+        _showMessage('剪贴板里没有图片（先截图或复制一张图）');
+        return;
+      }
+      _insertMarkdown(attached.markdownLink);
+      setState(_reloadAttachments);
+    } on Object catch (error) {
+      if (mounted) _showMessage('粘贴截图失败：$error');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// 把 Markdown 片段插到光标处（附件、截图共用）。
+  void _insertMarkdown(String markdown) {
+    final link = '$markdown\n';
+    final selection = _bodyController.selection;
+    final text = _bodyController.text;
+    final start = selection.isValid ? selection.start : text.length;
+    final end = selection.isValid ? selection.end : text.length;
+    final next = text.replaceRange(start, end, link);
+    _bodyController.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: start + link.length),
+    );
+    _state.draftChanged(body: next);
+    _bodyFocus.requestFocus();
   }
 
   Future<void> _export() async {
@@ -315,6 +341,11 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
                       icon: const Icon(Icons.attach_file),
                     ),
                     IconButton(
+                      tooltip: '粘贴截图（Ctrl+Shift+V）',
+                      onPressed: _busy ? null : _pasteScreenshot,
+                      icon: const Icon(Icons.add_photo_alternate_outlined),
+                    ),
+                    IconButton(
                       tooltip: '导出为 .md',
                       onPressed: _export,
                       icon: const Icon(Icons.file_download_outlined),
@@ -382,23 +413,36 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-      child: TextField(
-        key: const Key('editor-body'),
-        controller: _bodyController,
-        focusNode: _bodyFocus,
-        onChanged: _onBodyChanged,
-        maxLines: null,
-        expands: true,
-        textAlignVertical: TextAlignVertical.top,
-        keyboardType: TextInputType.multiline,
-        style: AppTheme.editorStyle(
-          _state.editorFontSize,
-          theme.colorScheme.onSurface,
-        ),
-        decoration: const InputDecoration(
-          border: InputBorder.none,
-          isDense: true,
-          hintText: '写点什么…支持 Markdown，输入后自动保存',
+      // Ctrl+Shift+V 粘贴截图：用 Ctrl+Shift 组合，不抢 TextField 自带的 Ctrl+V 文本粘贴。
+      child: Focus(
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent &&
+              HardwareKeyboard.instance.isControlPressed &&
+              HardwareKeyboard.instance.isShiftPressed &&
+              event.logicalKey == LogicalKeyboardKey.keyV) {
+            _pasteScreenshot();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: TextField(
+          key: const Key('editor-body'),
+          controller: _bodyController,
+          focusNode: _bodyFocus,
+          onChanged: _onBodyChanged,
+          maxLines: null,
+          expands: true,
+          textAlignVertical: TextAlignVertical.top,
+          keyboardType: TextInputType.multiline,
+          style: AppTheme.editorStyle(
+            _state.editorFontSize,
+            theme.colorScheme.onSurface,
+          ),
+          decoration: const InputDecoration(
+            border: InputBorder.none,
+            isDense: true,
+            hintText: '写点什么…支持 Markdown，输入后自动保存',
+          ),
         ),
       ),
     );

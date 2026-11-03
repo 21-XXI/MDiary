@@ -117,7 +117,6 @@ void main() {
     expect(state.entryRepo.count(), 0);
   }, skip: skip);
 }
-
 String? _locateSqlite3() {
   final fromEnv = Platform.environment['MDIARY_SQLITE_DLL'];
   if (fromEnv != null && File(fromEnv).existsSync()) return fromEnv;

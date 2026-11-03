@@ -76,11 +76,14 @@
 使用本地Git作为版本管理，每次提交必须diff并提交审查意见
 
 ### 7.1 客户端选型（M0 验证后定稿）
-- Flutter stable（3.x）+ Dart 3；单代码库 + 平台适配层（`lib/platform/`）。
-- 状态管理 Riverpod；路由 go_router；数据层 drift（SQLite，自带迁移与 FTS5）。
-- 编辑器：纯文本编辑器 + Markdown 语法高亮；预览用 flutter_markdown 系渲染器。
-- 附件：file_picker + 剪贴板粘贴 + 内容寻址（sha256）存储。
-- 平台打包：Windows 需 VS 2022「C++ 桌面开发」工作负载 + CMake。
+计划：Flutter stable（3.x）+ Dart 3；Riverpod；go_router；drift（SQLite + FTS5）；flutter_markdown 系渲染器。
+
+**v1.0 实际落地**（与计划的偏差已登记在 `docs/architecture.md` §5）：
+- 状态管理用内置 `ChangeNotifier` + `InheritedNotifier`（单窗口够用，少一层依赖）；
+- 路由用 `Navigator`（页面只有设置 / 回收站 / 星图）；
+- 数据层用 `sqlite3` 手写 SQL + `PRAGMA user_version` 迁移（不引 drift / build_runner，首编失败面更小）；
+- 检索用 `LIKE` 子串（标题/正文/标签），千篇实测 < 50ms，FTS5 留到量级变大再上；
+- 附件：file_picker 选择 + Windows 原生拖拽（`WM_DROPFILES`）+ 剪贴板截图（GDI+ 编码 PNG），内容寻址存储。
 
 ### 7.2 数据模型（客户端 SQLite）
 - `entry(id TEXT PK uuidv7, title TEXT, body_md TEXT, entry_date DATE, created_at, updated_at, rev INTEGER, deleted_at, device_id)`
@@ -90,8 +93,9 @@
 - `sync_state(key, value)`：last_sync_cursor、last_export_at 等
 
 ### 7.3 目录与仓库结构
-- monorepo：`apps/client_flutter/`、`services/go_api/`、`docs/`（含 `docs/reviews/`）、`scripts/`、`infra/`。
-- 数据目录：`%APPDATA%/MDiary/db.sqlite`；可选"工作区（Vault）"为用户自选目录（`*.md` + `assets/`）。
+- monorepo：`apps/client_flutter/`、`services/go_api/`（v2.0 起）、`docs/`（含 `docs/reviews/`）、`scripts/`、`infra/`（v2.0 起）。
+- 数据目录：默认 `<exe 目录>/MDiaryData/`（`mdiary.sqlite` + `attachments/` + `logs/`），绿色版随 exe 走；
+  设置页可换目录并迁移，指针存在 `<exe 目录>/mdiary-location.txt`；`MDIARY_HOME` 可覆盖；目录不可写时逐级回退。
 
 ### 7.4 Git 与审查规范
 - 分支：`main` 受保护；特性分支 `feat/xxx`、`fix/xxx`；提交信息走 Conventional Commits。
@@ -134,3 +138,46 @@
 - 示例 Vault（3 篇日记 + 附件），用于导入导出回归验证
 - （v2.0）Android APK / iOS TestFlight / macOS dmg / Linux AppImage
 - （v3.0）RAG 服务与 API 文档
+
+## 10. v1.0 交付状态（2026-11-03）
+
+### 10.1 已达成（对应第 3 节 Must Have）
+
+| 目标 | 状态 | 说明 |
+|---|---|---|
+| 1.1 编辑 / 预览 | ✅ | GFM 子集（标题/列表/引用/代码块/表格/链接/图片），编辑 / 分栏 / 预览三态 |
+| 1.2 自动保存 + 原子写 | ✅ | 800ms 防抖 + Ctrl+S / 失焦 / 关窗强制落库；导出先写 `.tmp` 再改名 |
+| 1.3 导出 | ✅ | 单篇与整库（`<日期>-<标题>.md` + `assets/`），front matter 含 tags |
+| 2.1 单一真源 | ✅ | SQLite 是唯一写入路径，磁盘 `.md` 只用于导出 / 导入 |
+| 2.2 表结构 | ✅（两处偏差） | entry / attachment / tag / entry_tags / app_meta 齐；`entry_fts` 未建（用 LIKE）、`sync_state` 由 app_meta 顶替 |
+| 2.3 迁移与备份 | ✅ | `PRAGMA user_version` 迁移；升级前 `VACUUM INTO` 自动快照 |
+| 3.1 视图 | ✅ | 时间轴 + 左栏月历（点日期新建 / 打开当天）、置顶、软删除、回收站 |
+| 3.2 检索 | ✅ | 标题 + 正文 + 标签，中文子串匹配 |
+| 3.3 预览态 | ✅ | 预览 / 分栏下可直接导出 |
+| 4.1 附件格式 | ✅ | 任意文件 ≤ 25 MB，图片内嵌预览 |
+| 4.2 插入方式 | ✅ | 菜单选择、Windows 拖拽、剪贴板截图（工具栏按钮 / Ctrl+Shift+V） |
+| 4.3 存储 | ✅ | sha256 内容寻址、DB 只存引用、彻底删除后自动 GC |
+
+附加能力（超出 v1.0 计划，已并入本版）：左栏月历、星图（全部/年/月/周，共用附件连线）、
+标签（列表/搜索/导出导入）、绿色版数据目录与迁移、附件名写进 .md 且预览里彩色可点。
+
+### 10.2 质量门槛
+
+- `flutter analyze` 0 issue；`flutter test` 162 passed；`flutter build windows --release` 成功。
+- 交付物：`dist/MDiary-1.0.0-windows-x64/` 与同名 zip（含 README / 使用说明 / 交付说明 / 发布说明 / 验收清单）。
+
+### 10.3 已知遗留（v1.1 候选，详见 `docs/backlog-v1.1.md`）
+
+- 单实例互斥、回收站「清空」、窗口尺寸记忆、最小窗口限制；
+- 打开附件走 `cmd /c start`（用户名含 `&` / `%` 时有风险）；
+- 导出附件名是哈希（可读性）；
+- 检索未上 FTS5（单库 > 5,000 篇再评估）；
+- 截图粘贴仅 Windows（依赖 runner 方法通道，其它平台需要各自的实现）。
+
+### 10.4 后续开发起点
+
+- **v1.1（打磨）**：先做 backlog A 组（单实例、`ShellExecuteW`、导出幽灵条目、导入大小上限）+ B 组体验项。
+- **v2.0（多端 + 同步）**：`services/go_api/` 按 §7.5 起步；客户端把写入改为「本地库 + 同步队列」双写，
+  `rev` / `device_id` / `deleted_at` 已预留。
+- **v3.0（RAG）**：分块 + embedding + pgvector；API Key 只放服务端，上送需显式授权。
+- 开发命令：`scripts/verify.ps1`（analyze + test + build）、`scripts/build.ps1`（含 `--no-tree-shake-icons`）。

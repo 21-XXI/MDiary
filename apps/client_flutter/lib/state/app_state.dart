@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../core/app_paths.dart';
+import '../core/clipboard_image.dart';
 import '../core/ids.dart';
 import '../data/attachment_repository.dart';
 import '../data/attachment_store.dart';
@@ -75,8 +76,10 @@ class AppState extends ChangeNotifier {
     this.dataRootPath = '',
     this.dataRootNotice,
     TagRepository? tagRepository,
+    ClipboardImageReader? clipboardImageReader,
   }) : _filePicker = filePicker ?? _defaultFilePicker,
        _directoryPicker = directoryPicker ?? _defaultDirectoryPicker,
+       _clipboardImageReader = clipboardImageReader ?? ClipboardImage.read,
        tagRepo = tagRepository ?? TagRepository(db);
 
   AppDatabase db;
@@ -89,6 +92,7 @@ class AppState extends ChangeNotifier {
 
   final SingleFilePicker _filePicker;
   final DirectoryPicker _directoryPicker;
+  final ClipboardImageReader _clipboardImageReader;
 
   /// 数据根目录（设置页展示/打开用）。由 main 注入，UI 不直接依赖全局 AppPaths。
   String dataRootPath;
@@ -461,8 +465,19 @@ class AppState extends ChangeNotifier {
     return attachBytes(entry, bytes, p.basename(path));
   }
 
-  /// 从资源管理器拖进窗口的文件（Windows）：挂到当前正在写的日记上；
-  /// 没有打开的日记就先新建一篇。返回成功添加的个数。
+  /// 把剪贴板里的图片（Windows 截图）落成附件；剪贴板没有图片时返回 null。
+  Future<AttachedFile?> pasteClipboardImage(Entry entry) async {
+    final bytes = await _clipboardImageReader();
+    if (bytes == null || bytes.isEmpty) return null;
+    final now = DateTime.now();
+    String two(int value) => value.toString().padLeft(2, '0');
+    final name =
+        '截图-${now.year}${two(now.month)}${two(now.day)}-'
+        '${two(now.hour)}${two(now.minute)}${two(now.second)}.png';
+    return attachBytes(entry, bytes, name);
+  }
+
+  /// 从资源管理器拖进窗口的文件（Windows）：挂到当前正在写的日记上；  /// 没有打开的日记就先新建一篇。返回成功添加的个数。
   ///
   /// 与工具栏「插入附件」一致：除了落盘 + 写 attachments 表，还要把
   /// `assets/<sha>.<ext>` 引用插进正文，导出的 .md 才带着附件。

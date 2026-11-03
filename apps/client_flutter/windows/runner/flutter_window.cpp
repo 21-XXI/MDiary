@@ -3,12 +3,98 @@
 #include <flutter/standard_method_codec.h>
 #include <shellapi.h>
 
+#include <algorithm>
 #include <optional>
 #include <string>
 #include <vector>
 
+// GDI+ headers expect min/max macros; the build defines NOMINMAX.
+#ifndef min
+#define min(a, b) (((a) < (b)) ? (a) : (b))
+#endif
+#ifndef max
+#define max(a, b) (((a) > (b)) ? (a) : (b))
+#endif
+#include <gdiplus.h>
+#undef min
+#undef max
+
 #include "flutter/generated_plugin_registrant.h"
 #include "utils.h"
+
+namespace {
+
+int GetEncoderClsid(const WCHAR* mime, CLSID* clsid) {
+  UINT count = 0;
+  UINT size = 0;
+  Gdiplus::GetImageEncodersSize(&count, &size);
+  if (size == 0) {
+    return -1;
+  }
+  std::vector<BYTE> buffer(size);
+  auto* codecs = reinterpret_cast<Gdiplus::ImageCodecInfo*>(buffer.data());
+  Gdiplus::GetImageEncoders(count, size, codecs);
+  for (UINT i = 0; i < count; ++i) {
+    if (wcscmp(codecs[i].MimeType, mime) == 0) {
+      *clsid = codecs[i].Clsid;
+      return static_cast<int>(i);
+    }
+  }
+  return -1;
+}
+
+bool EnsureGdiplus() {
+  static ULONG_PTR token = 0;
+  static bool ready = false;
+  if (!ready) {
+    Gdiplus::GdiplusStartupInput input;
+    ready = Gdiplus::GdiplusStartup(&token, &input, nullptr) == Gdiplus::Ok;
+  }
+  return ready;
+}
+
+// Reads CF_BITMAP from the clipboard and encodes it as PNG.
+bool ReadClipboardImagePng(std::vector<uint8_t>* out) {
+  if (!EnsureGdiplus()) {
+    return false;
+  }
+  if (!OpenClipboard(nullptr)) {
+    return false;
+  }
+  bool ok = false;
+  HBITMAP handle = static_cast<HBITMAP>(GetClipboardData(CF_BITMAP));
+  if (handle != nullptr) {
+    Gdiplus::Bitmap bitmap(handle, nullptr);
+    CLSID encoder;
+    if (bitmap.GetLastStatus() == Gdiplus::Ok &&
+        GetEncoderClsid(L"image/png", &encoder) >= 0) {
+      IStream* stream = nullptr;
+      if (CreateStreamOnHGlobal(nullptr, TRUE, &stream) == S_OK) {
+        if (bitmap.Save(stream, &encoder, nullptr) == Gdiplus::Ok) {
+          STATSTG stat;
+          if (stream->Stat(&stat, STATFLAG_NONAME) == S_OK &&
+              stat.cbSize.QuadPart > 0) {
+            HGLOBAL memory = nullptr;
+            if (GetHGlobalFromStream(stream, &memory) == S_OK) {
+              void* data = GlobalLock(memory);
+              if (data != nullptr) {
+                const auto* bytes = static_cast<uint8_t*>(data);
+                out->assign(bytes, bytes + stat.cbSize.QuadPart);
+                ok = true;
+                GlobalUnlock(memory);
+              }
+            }
+          }
+        }
+        stream->Release();
+      }
+    }
+  }
+  CloseClipboard();
+  return ok && !out->empty();
+}
+
+}  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -40,6 +126,27 @@ bool FlutterWindow::OnCreate() {
           &flutter::StandardMethodCodec::GetInstance());
   DragAcceptFiles(GetHandle(), TRUE);
 
+  // Paste screenshot: hand Dart the clipboard image as PNG bytes.
+  clipboard_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(), "mdiary/clipboard",
+          &flutter::StandardMethodCodec::GetInstance());
+  clipboard_channel_->SetMethodCallHandler(
+      [](const flutter::MethodCall<flutter::EncodableValue>& call,
+         std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+             result) {
+        if (call.method_name() == "readImagePng") {
+          std::vector<uint8_t> png;
+          if (ReadClipboardImagePng(&png)) {
+            result->Success(flutter::EncodableValue(png));
+          } else {
+            result->Success(flutter::EncodableValue());
+          }
+          return;
+        }
+        result->NotImplemented();
+      });
+
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -57,6 +164,7 @@ bool FlutterWindow::OnCreate() {
 void FlutterWindow::OnDestroy() {
   DragAcceptFiles(GetHandle(), FALSE);
   drop_channel_.reset();
+  clipboard_channel_.reset();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

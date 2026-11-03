@@ -1,4 +1,4 @@
-# MDiary Windows Release 构建
+﻿# MDiary Windows Release 构建
 #
 # 背景：Flutter 的 Windows 构建链（CMake -> MSBuild）在处理含中文的工程路径时
 # 会按 ANSI(GBK) 转码，导致 `Unable to read file ...\app.dill` 之类的失败。
