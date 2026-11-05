@@ -1,7 +1,7 @@
 # MDiary v1.0 架构设计
 
 > 对应需求：`docs/project.md` 第 3 节目标 1–4、第 7 节技术约束。本文只覆盖 v1.0（Windows 桌面），
-> 后端同步（v2.0）与 RAG（v3.0）仅预留字段，不实现。
+> RAG（v2.0）与后端同步（v3.0）仅预留字段，不实现。
 
 ## 1. 分层与目录
 
@@ -46,7 +46,7 @@ apps/client_flutter/
 ```
 
 约定：`features` 只通过 `repositories` / `services` 触达数据，不直接持有 `AppDatabase`；
-UI 不写 SQL；所有写操作走仓储，便于 v2.0 换成「本地库 + 同步队列」双写。
+UI 不写 SQL；所有写操作走仓储，便于 v3.0 换成「本地库 + 同步队列」双写。
 
 ## 2. 数据模型（SQLite / drift）
 
@@ -61,7 +61,7 @@ CREATE TABLE entries (
   rev         INTEGER NOT NULL DEFAULT 1, -- 预留：同步冲突判定
   deleted_at  INTEGER,                    -- 软删除，回收站
   pinned      INTEGER NOT NULL DEFAULT 0,
-  device_id   TEXT NOT NULL               -- 预留：v2.0 多端来源
+  device_id   TEXT NOT NULL               -- 预留：v3.0 多端来源
 );
 
 CREATE TABLE attachments (
@@ -90,7 +90,7 @@ CREATE TABLE app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 ```
 
 **为什么附件二进制不入库**（project.md A3）：库文件保持 KB 级，备份/迁移快；sha256 去重；
-v2.0 同步时按 hash 上传即可幂等。代价是「文件已写、记录未写」的中间态，靠启动 GC 兜底。
+v3.0 同步时按 hash 上传即可幂等。代价是「文件已写、记录未写」的中间态，靠启动 GC 兜底。
 
 ## 3. 关键流程
 

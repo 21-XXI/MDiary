@@ -32,7 +32,7 @@
 1. **附件插入方式**：菜单选择与 Windows 拖拽已支持；**剪贴板粘贴截图未实现**（需读 CF_DIB 后编码 PNG，列 v1.1）。
 2. **搜索为 `LIKE` 子串匹配**，未上 FTS5；千篇实测 37ms，暂不构成瓶颈。搜索范围含标题、正文、标签名。
 3. **无工作区（Vault）模式**：数据默认在 `<exe 目录>\MDiaryData`（绿色版），设置页可换目录并迁移；`MDIARY_HOME` 可覆盖。导出即得到标准 Markdown 目录。
-4. **无账号/同步/加密**：v2.0 才接 Go + PostgreSQL；同步字段（`rev`/`device_id`/`deleted_at`）已预留。
+4. **无账号/同步/加密**：v3.0 才接 Go + PostgreSQL；同步字段（`rev`/`device_id`/`deleted_at`）已预留。
 5. **未做代码签名**：首次运行可能有 SmartScreen 提示。
 6. **单实例未加锁**：同时开两个实例会共享同一数据库文件（WAL 允许，但不建议同时编辑同一篇）。
 
@@ -51,5 +51,5 @@
 ## 6. 后续计划
 
 - **v1.1**（打磨）：拖拽/粘贴附件、工作区目录选择、FTS5 检索、回收站清空、窗口状态记忆
-- **v2.0**（多端 + 同步）：Android → macOS → Linux → iOS；Go + PostgreSQL；条目级 LWW 冲突副本
-- **v3.0**（RAG）：分块 + embedding + pgvector；摘要/标签建议；第三方上送需显式授权
+- **v3.0**（多端 + 同步）：Android → macOS → Linux → iOS；Go + PostgreSQL；条目级 LWW 冲突副本
+- **v2.0**（RAG，本地优先）：分块 + 本地 embedding + sqlite-vec；摘要/标签建议；第三方上送需显式授权

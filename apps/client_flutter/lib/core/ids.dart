@@ -12,5 +12,5 @@ String newId() {
       '${hex.substring(16, 20)}-${hex.substring(20)}';
 }
 
-/// 本机标识：v2.0 同步时用于标记条目来源设备。
+/// 本机标识：v3.0 同步时用于标记条目来源设备。
 String newDeviceId() => newId();

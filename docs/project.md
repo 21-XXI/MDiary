@@ -35,13 +35,16 @@
   - M2 编辑与预览（2 周）：编辑器、自动保存、附件、快捷键。
   - M3 列表 / 搜索 / 设置（1.5 周）：时间轴、FTS5 检索、主题与字体。
   - M4 打包与验收（1 周）：安装包、崩溃日志、验收清单回归。
-- 迭代目标2：后依次移植到Android/iOS/macOS/Linux（版本号v2.0）
+- 迭代目标2：先把日记做成 RAG，接入大模型做检索问答与整理（版本号 v2.0）
+  - 2.0.1 分块（按标题/段落，带 `entry_id` / 日期 / 标签元数据）→ embedding → 本地向量索引
+    （sqlite-vec，与库同目录、可随库备份）；服务端 pgvector 留给 v3.0 复用。
+  - 2.0.2 能力：检索问答（带原文引用，可跳回原日记）、自动摘要、标签建议、相似日记推荐。
+  - 2.0.3 隐私：默认全本地（Ollama / 本地 embedding）；API Key 只存本机且加密；
+    日记内容上送第三方须显式授权、可撤销、可导出。
+- 迭代目标3：RAG 稳定后再依次移植到 Android/iOS/macOS/Linux，并引入 Go 服务端同步（版本号 v3.0）
   - 移植顺序：Android → macOS → Linux → iOS（iOS 需开发者账号与审核，风险最高放最后）。
   - 移植内容：路径与权限（沙箱 / scoped storage）、分享与导出（share_plus / 文件选择器）、响应式布局与触屏交互。
-- 迭代目标3：可将文件制作成rag，接入大模型api进行管理（版本号v3.0）
-  - 3.0.1 分块（按标题/段落，带 entry_id 元数据）→ embedding → pgvector 入库。
-  - 3.0.2 检索问答、自动摘要、标签建议、相似日记推荐。
-  - 3.0.3 API Key 仅存服务端；支持本地模型选项；日记内容上送第三方须显式授权且可撤销。
+  - 服务端：Go + PostgreSQL + pgvector，复用 v2.0 的 chunk / embedding，多端增量同步（条目级 LWW）。
 
 ## 5. 非目标（Out of Scope，重点！不做什么）
 - 不做富文本（Word 式所见即所得）：Markdown 纯文本是唯一存储格式。
@@ -90,13 +93,13 @@
 ### 7.2 数据模型（客户端 SQLite）
 - `entry(id TEXT PK uuidv7, title TEXT, body_md TEXT, entry_date DATE, created_at, updated_at, rev INTEGER, deleted_at, device_id)`
 - `attachment(id, entry_id, sha256, filename, mime, size, created_at)`
-- `attachment_blobs(sha256 PK, size, bytes)`：附件字节（v2 起入库，按 sha 去重）
+- `attachment_blobs(sha256 PK, size, bytes)`：附件字节（schema v2 起入库，按 sha 去重）
 - `tag(id, name)` / `entry_tag(entry_id, tag_id, PRIMARY KEY(entry_id, tag_id))`
 - `entry_fts`（FTS5 虚表，trigram 分词，rowid ↔ entry.id 映射）
 - `sync_state(key, value)`：last_sync_cursor、last_export_at 等
 
 ### 7.3 目录与仓库结构
-- monorepo：`apps/client_flutter/`、`services/go_api/`（v2.0 起）、`docs/`（含 `docs/reviews/`）、`scripts/`、`infra/`（v2.0 起）。
+- monorepo：`apps/client_flutter/`、`services/go_api/`（v3.0 起）、`docs/`（含 `docs/reviews/`）、`scripts/`、`infra/`（v3.0 起）。
 - 数据目录：默认 `<exe 目录>/MDiaryData/`，绿色版随 exe 走；结构为
   `db/mdiary.sqlite`（数据库，含附件字节）+ `attachments/`（预览/打开缓存，可重建）+ `logs/`。
   老版本放在根目录的 `mdiary.sqlite` 会在启动时自动搬进 `db/`。
@@ -111,18 +114,54 @@
 - 每次提交必须先 `git add -p` / `git diff --staged` 自审，审查意见写入提交正文（模板：改动 / 原因 / 风险 / 验证方式 / 回滚），必要时在 `docs/reviews/YYYYMMDD-<topic>.md` 存档。
 - 提交模板放 `.gitmessage`，`git config commit.template .gitmessage` 生效。
 
-### 7.5 后端与同步（v2+，本期仅预留字段）
+### 7.5 后端与同步（v3.0，本期仅预留字段）
 - Go 1.22+：路由 chi/fiber、驱动 pgx、查询 sqlc（或 GORM）；契约先行（OpenAPI）。
 - 表：users / devices / entries（与客户端同构 + owner_id + rev）/ attachments（按 sha256 去重）/ entry_commits（审计）。
 - 同步协议：`GET /sync?since=<rev>` 拉增量，`POST /sync` 推变更，条目级 LWW；冲突落盘为 `标题 (冲突副本 2026-11-02).md`。
 - 认证：邮箱/设备码 + JWT；附件走 S3/MinIO 预签名直传。
-- 检索：PostgreSQL 中文分词（zhparser/pg_jieba）或 pgvector（v3 复用）。
+- 检索：PostgreSQL 中文分词（zhparser/pg_jieba）或 pgvector（复用 v2.0 的 RAG chunk/embedding）。
+
+### 7.6 RAG 技术选型（v2.0）
+
+**目标**：日记只在本机就能「问一句、答一段、带出处」，不强制联网；联网能力是可选增强。
+
+**三种部署形态**（推荐 A，按需升级到 C）：
+
+| 形态 | 组成 | 优点 | 代价 |
+|---|---|---|---|
+| **A. 纯本地（推荐）** | `sqlite-vec` + 本地 embedding（Ollama `bge-m3` 或 ONNX `fastembed`）+ 可选本地 LLM（Ollama `qwen3` / `llama3.1`） | 全离线、无服务进程、索引与库同目录（可随库备份）、绿色版友好 | 首次要下模型；小模型效果有上限 |
+| B. 桌面一体化 | 参考 AnythingLLM Desktop（Electron + LanceDB） | 开箱即用的文档问答 | 和 Flutter 集成成本高、体积大 |
+| C. 自托管服务 | RAGFlow / Dify（Docker） | 解析 / 切片 / rerank / 引用成熟，多设备共享 | 要 Docker 或服务器，不适合塞进 exe |
+
+**开源候选**（许可与特性以各自仓库为准）：
+
+| 类别 | 候选 | 说明 |
+|---|---|---|
+| 嵌入式向量检索 | [sqlite-vec](https://github.com/asg017/sqlite-vec)、[LanceDB](https://github.com/lancedb/lancedb) | 前者是单文件 SQLite 扩展，暴力 KNN，十万级 chunk 够用；后者列式存储、带磁盘索引 |
+| 向量服务 | [Chroma](https://github.com/chroma-core/chroma)、[Qdrant](https://github.com/qdrant/qdrant)、[pgvector](https://github.com/pgvector/pgvector) | 前两个可本机跑；pgvector 留给 v3.0 服务端 |
+| RAG 平台 | [RAGFlow](https://github.com/infiniflow/ragflow)（Apache-2.0）、[Dify](https://github.com/langgenius/dify)、[AnythingLLM](https://github.com/Mintplex-Labs/anything-llm)（MIT）、[Khoj](https://github.com/khoj-ai/khoj)（AGPL-3.0） | RAGFlow 强在深度文档解析；AnythingLLM 有桌面版可参考；Khoj 是 AGPL，商用/闭源分发要谨慎 |
+| 图谱增强 | [LightRAG](https://github.com/HKUDS/LightRAG)（MIT） | 实体关系 + 向量，适合"人物/地点/事件"式回忆，可作为 v2.x 增强 |
+| 框架 | [LlamaIndex](https://github.com/run-llama/llama_index)、[Haystack](https://github.com/deepset-ai/haystack) | 想自己拼流水线时用；纯 Dart 生态目前没有成熟替代 |
+| 中文 embedding / rerank | BGE-M3、bge-reranker-v2-m3、Qwen3-Embedding | 开源权重，可本地跑；中文日记建议先用 BGE-M3 |
+| 推理运行时 | [Ollama](https://github.com/ollama/ollama)、[llama.cpp](https://github.com/ggml-org/llama.cpp) | Ollama 最省事；要嵌进安装包时用 llama.cpp |
+
+**v2.0 落地路线**：
+
+1. **切片**：Markdown 结构感知（标题树 + 段落，代码块整块保留），512–800 tokens，
+   每个 chunk 带 `entry_id` / `entry_date` / `tags`。
+2. **索引**：`chunk` 表 + `sqlite-vec` 虚拟表（BGE-M3 = 1024 维）；同时用 FTS5/trigram 做关键词召回，
+   两路结果 RRF 融合，可选本地 rerank。
+3. **生成**：默认本地 Ollama；用户也可填自己的 API Key（只存本机、加密）。
+   回答必须带 `[日期-标题]` 引用，点引用跳回原日记。
+4. **增量**：保存/删除日记时只重算该条目的 chunk；启动做一次补偿扫描；索引文件放库目录下随库备份。
+5. **隐私**：默认不出网；切到云端 embedding/LLM 时二次确认；日志不记录正文。
+6. **评测**：用 30–50 条真实日记做问答集，量 recall@5 与引用准确率，再决定换更大模型或加 rerank。
 
 ## 8. 风险与假设
 ### 8.1 假设条件（依赖什么）
-- A1 单人开发，v1.0 仅交付 Windows；其余平台在 v2.0 排期。
+- A1 单人开发，v1.0 仅交付 Windows；其余平台在 v3.0 排期（v2.0 先做 RAG）。
 - A2 用户接受"SQLite 为真源、磁盘 .md 为导出物"，不要求直接编辑磁盘文件再回写数据库（镜像/双向模式列为 v1.1 可选）。
-- A3 附件二进制存 SQLite（`attachment_blobs`，v2 起）；磁盘 `attachments/` 只作预览/打开缓存，可随时重建。
+- A3 附件二进制存 SQLite（`attachment_blobs`，schema v2 起）；磁盘 `attachments/` 只作预览/打开缓存，可随时重建。
 - A4 规模假设：单篇正文 ≤ 100 KB，附件单文件 ≤ 100 MB，单库总量 ≤ 2 GB。
 - A5 目标环境：Windows 10 1809+ / x64，UTF-8 无 BOM、LF 换行。
 - A6 界面以中文为主，v1.0 不做 i18n，但文案集中管理便于后续抽取。
@@ -145,8 +184,8 @@
 - 验收入口清单与测试记录（`docs/acceptance-v1.1.md`）
 - 提交审查记录（`docs/reviews/` + `.gitmessage` 模板）
 - 示例 Vault（3 篇日记 + 附件），用于导入导出回归验证
-- （v2.0）Android APK / iOS TestFlight / macOS dmg / Linux AppImage
-- （v3.0）RAG 服务与 API 文档
+- （v2.0）RAG 索引与问答（本地优先）、检索接口文档
+- （v3.0）Android APK / iOS TestFlight / macOS dmg / Linux AppImage（+ 同步服务端）
 
 ## 10. 交付状态（v1.0 2026-11-03 / v1.1 2026-11-05 / v1.1.1 打磨）
 
@@ -190,7 +229,8 @@
 ### 10.4 后续开发起点
 
 - **v1.1（打磨）**：先做 backlog A 组（单实例、`ShellExecuteW`、导出幽灵条目、导入大小上限）+ B 组体验项。
-- **v2.0（多端 + 同步）**：`services/go_api/` 按 §7.5 起步；客户端把写入改为「本地库 + 同步队列」双写，
-  `rev` / `device_id` / `deleted_at` 已预留。
-- **v3.0（RAG）**：分块 + embedding + pgvector；API Key 只放服务端，上送需显式授权。
+- **v2.0（RAG，本地优先）**：按 §7.6 的路线做切片 + 本地 embedding + sqlite-vec；问答必须带引用，
+  API Key 只存本机；服务端化留给 v3.0。
+- **v3.0（多端 + 同步）**：`services/go_api/` 按 §7.5 起步，pgvector 复用 v2.0 的索引；客户端把写入
+  改为「本地库 + 同步队列」双写，`rev` / `device_id` / `deleted_at` 已预留。
 - 开发命令：`scripts/verify.ps1`（analyze + test + build）、`scripts/build.ps1`（含 `--no-tree-shake-icons`）。
