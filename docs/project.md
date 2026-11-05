@@ -41,6 +41,10 @@
   - 2.0.2 能力：检索问答（带原文引用，可跳回原日记）、自动摘要、标签建议、相似日记推荐。
   - 2.0.3 隐私：默认全本地（Ollama / 本地 embedding）；API Key 只存本机且加密；
     日记内容上送第三方须显式授权、可撤销、可导出。
+  - 2.0.4 每日语义管理：每天定时（或启动补跑）对**新增/修改**的日记做切片、摘要、标签建议，
+    并**把附件一起索引**（文本类抽文本、图片存文件名/说明），让检索工具能命中附件。
+  - 2.0.5 日报：小模型每天生成一份当日日报（写了什么 / 关键点 / 待办），带原文引用。
+  - 2.0.6 `soul.md`：把库归纳成一份 ≤ 8 KB 的「灵魂档案」，作为大模型接入时的固定上下文。
 - 迭代目标3：RAG 稳定后再依次移植到 Android/iOS/macOS/Linux，并引入 Go 服务端同步（版本号 v3.0）
   - 移植顺序：Android → macOS → Linux → iOS（iOS 需开发者账号与审核，风险最高放最后）。
   - 移植内容：路径与权限（沙箱 / scoped storage）、分享与导出（share_plus / 文件选择器）、响应式布局与触屏交互。
@@ -97,6 +101,12 @@
 - `tag(id, name)` / `entry_tag(entry_id, tag_id, PRIMARY KEY(entry_id, tag_id))`
 - `entry_fts`（FTS5 虚表，trigram 分词，rowid ↔ entry.id 映射）
 - `sync_state(key, value)`：last_sync_cursor、last_export_at 等
+- **v2.0（RAG）新增**：`entries.source`（`user` / `report`）、
+  `chunk(id, entry_id, attachment_id, kind, ordinal, text, summary, hash, updated_at)`、
+  `chunk_vec`（sqlite-vec 虚拟表，rowid ↔ chunk）、
+  `entry_summary(entry_id PK, summary, tags_suggested, generated_at, model)`、
+  `attachment_text(sha256 PK, text, source)`、`index_meta(key, value)`、
+  `job(id, kind, target_date, status, attempts, last_error)`
 
 ### 7.3 目录与仓库结构
 - monorepo：`apps/client_flutter/`、`services/go_api/`（v3.0 起）、`docs/`（含 `docs/reviews/`）、`scripts/`、`infra/`（v3.0 起）。
@@ -157,6 +167,43 @@
 5. **隐私**：默认不出网；切到云端 embedding/LLM 时二次确认；日志不记录正文。
 6. **评测**：用 30–50 条真实日记做问答集，量 recall@5 与引用准确率，再决定换更大模型或加 rerank。
 
+### 7.7 语义管理 / 日报 / soul.md（v2.0）
+
+这三件事共用一条「每日任务」流水线：本地小模型负责语义，程序负责一致性与调度。
+
+**调度（桌面程序不是常驻服务）**
+- 启动时检查 `job` 表：`last_daily_run < 今天` 就补跑一次；运行中到设定时间（默认 03:00，可改）再跑；
+- 支持「立即整理」手动触发；同一 `target_date` 幂等，可断点续跑；
+- 单条失败只记 `last_error`（重试 3 次后退避），不影响其它条目；整体失败次日重试并在设置页提示。
+
+**每日流水线**（只处理 `updated_at > last_indexed_at` 的条目与新附件）
+1. 切片：Markdown 结构感知（标题树 + 段落，代码块整块保留），512–800 tokens，带 `entry_id` / 日期 / 标签。
+2. **附件索引**（关键）：
+   - 所有附件先入 `chunk(kind='attachment')`：文件名 + MIME + 大小 + 所属日记摘要，保证能命中「那张发票截图」；
+   - 文本类（txt/md/csv/json/代码）抽文本进 `attachment_text` 再按段落切块；
+   - PDF 只抽可选中文本（不引入重 OCR 依赖），失败就只保留元数据；
+   - 图片可选让小视觉模型生成一句说明（默认关，属增强项，不违反「不做 OCR」的非目标）。
+3. 摘要：小模型给每个 chunk 写 1–2 句摘要，再汇总成 `entry_summary`；标签建议只展示，不自动改用户标签。
+4. embedding：批量（如 32 条/批）调本地 BGE-M3 写 `chunk_vec`；模型/维度变更时整库重建。
+5. 日报 + soul.md（见下）。
+6. 收尾：`last_indexed_at = now`，写 `job` 记录。
+
+**日报（`reports/YYYY-MM-DD.md`，同时入 entries）**
+- 输入：当天新增/修改条目的摘要 + 当天附件名；输出三段：`今天写了什么`（时间线）、`关键点 / 待办`、`一句话总结`；
+- 每条要点带 `[日期-标题]` 引用；默认生成「昨天」的日报（凌晨跑），空日不生成，避免噪音；
+- 以 `entries.source='report'` 入库并打 `日报` 标签：可搜索、可导出、可被 RAG 检索；列表可按标签筛掉。
+
+**soul.md（`<库目录>/soul.md`，随库迁移/备份）**
+- 定位：给大模型的「这个人和这个库」的固定上下文，不是全量导出；预算 **≤ 8 KB**（约 3–4k tokens）；
+- 固定骨架：`## 1. 这个人` / `## 2. 长期主题` / `## 3. 重要的人·地点·项目` / `## 4. 写作与语气` /
+  `## 5. 时间线（每年一行）` / `## 6. 近期状态（最近 30 天）` / `## 7. 如何检索这个库（标签词表、附件约定、日报位置）`；
+- 分两阶段生成，避免每次全库喂模型：(a) 年/月滚动摘要（缓存、增量更新）；(b) 用滚动摘要 + 近期摘要合成 soul.md；
+- 触发：距上次 ≥ 7 天、或新增 ≥ 20 篇、或手动「重新生成」；写 `.tmp` 后 rename，保留上一版 `soul.md.bak`；
+- 头部写元信息（覆盖时间范围、篇数、模型、生成时间），正文只做归纳，不带原文细节，便于随时贴给别的模型。
+
+**给 agent 的工具面（与 §7.6 的 MCP 一致）**
+`search_diary` / `get_entry` / `get_attachment` / `get_soul` / `get_daily_report(date)` / `list_tags`。
+
 ## 8. 风险与假设
 ### 8.1 假设条件（依赖什么）
 - A1 单人开发，v1.0 仅交付 Windows；其余平台在 v3.0 排期（v2.0 先做 RAG）。
@@ -184,7 +231,7 @@
 - 验收入口清单与测试记录（`docs/acceptance-v1.1.md`）
 - 提交审查记录（`docs/reviews/` + `.gitmessage` 模板）
 - 示例 Vault（3 篇日记 + 附件），用于导入导出回归验证
-- （v2.0）RAG 索引与问答（本地优先）、检索接口文档
+- （v2.0）RAG 索引与问答（本地优先）、每日语义管理、日报、`soul.md`、检索接口文档
 - （v3.0）Android APK / iOS TestFlight / macOS dmg / Linux AppImage（+ 同步服务端）
 
 ## 10. 交付状态（v1.0 2026-11-03 / v1.1 2026-11-05 / v1.1.1 打磨）
@@ -229,8 +276,8 @@
 ### 10.4 后续开发起点
 
 - **v1.1（打磨）**：先做 backlog A 组（单实例、`ShellExecuteW`、导出幽灵条目、导入大小上限）+ B 组体验项。
-- **v2.0（RAG，本地优先）**：按 §7.6 的路线做切片 + 本地 embedding + sqlite-vec；问答必须带引用，
-  API Key 只存本机；服务端化留给 v3.0。
+- **v2.0（RAG，本地优先）**：按 §7.6 的路线做切片 + 本地 embedding + sqlite-vec；再看 §7.7 的
+  每日语义管理（含附件索引）、日报、`soul.md`；问答必须带引用，API Key 只存本机；服务端化留给 v3.0。
 - **v3.0（多端 + 同步）**：`services/go_api/` 按 §7.5 起步，pgvector 复用 v2.0 的索引；客户端把写入
   改为「本地库 + 同步队列」双写，`rev` / `device_id` / `deleted_at` 已预留。
 - 开发命令：`scripts/verify.ps1`（analyze + test + build）、`scripts/build.ps1`（含 `--no-tree-shake-icons`）。
