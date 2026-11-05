@@ -200,4 +200,4 @@ open_filex —— 每多一个依赖就多一类首次编译失败与版本冲�
 
 - `flutter analyze`（0 issue）、`flutter test`（纯逻辑单测：front matter 解析、导出文件名规范化、sha256 寻址、搜索高亮）。
 - `flutter build windows --release` 产出 `build\windows\x64\runner\Release\mdiary.exe`。
-- 手工验收按 `docs/acceptance-v1.0.md` 逐条勾选。
+- 手工验收按 `docs/acceptance-v1.1.md` 逐条勾选。

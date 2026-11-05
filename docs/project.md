@@ -142,7 +142,7 @@
 - 代码库（monorepo：Flutter 客户端 + Go 服务端 + docs + scripts）
 - v1.0 Windows 安装包（`MDiary-1.0.0-windows-x64.zip`）与 `README.md`（安装 / 使用 / 备份说明）
 - 数据库 schema 迁移文件与说明（`docs/schema.md`）
-- 验收入口清单与测试记录（`docs/acceptance-v1.0.md`）
+- 验收入口清单与测试记录（`docs/acceptance-v1.1.md`）
 - 提交审查记录（`docs/reviews/` + `.gitmessage` 模板）
 - 示例 Vault（3 篇日记 + 附件），用于导入导出回归验证
 - （v2.0）Android APK / iOS TestFlight / macOS dmg / Linux AppImage
