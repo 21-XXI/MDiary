@@ -58,7 +58,8 @@
 
 | 内容 | 位置 |
 |---|---|
-| 数据库 | `MDiaryData\db\mdiary.sqlite`（默认在 mdiary.exe 同目录） |
+| 数据库 | `MDiaryData\db\mdiary.sqlite`（默认库；设置里可换到任意目录） |
+| 库列表 | `MDiaryData\libraries.json`（记住当前库和最近用过的库） |
 | 附件 | 存在数据库里；`MDiaryData\attachments\` 只是缓存 |
 | 设置 | 同目录数据库内 `app_meta` 表 |
 

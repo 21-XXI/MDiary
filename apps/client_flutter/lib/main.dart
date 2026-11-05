@@ -20,6 +20,8 @@ Future<void> main() async {
   AppLogger? logger;
   try {
     await AppPaths.init();
+    // 读回上次选中的库目录（默认 `<数据目录>/db`）。
+    AppPaths.loadLibrary();
     logger = AppLogger(resolveLogFile(AppPaths.root.path))..install();
     final resolution = AppPaths.resolution;
     if (resolution != null && resolution.isFallback) {

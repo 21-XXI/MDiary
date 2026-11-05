@@ -90,47 +90,55 @@ class SettingsPage extends StatelessWidget {
             child: Column(
               children: <Widget>[
                 ListTile(
-                  leading: const Icon(Icons.folder_outlined),
-                  title: const Text('数据目录'),
+                  leading: const Icon(Icons.storage_outlined),
+                  title: const Text('当前库'),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       SelectableText(
-                        state.dataRootPath,
+                        state.libraryPath,
                         style: theme.textTheme.bodySmall,
                       ),
-                      if (state.dataRootSourceLabel.isNotEmpty)
-                        Text(
-                          state.dataRootSourceLabel,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
+                      Text(
+                        '库里是日记 + 附件字节；换目录就是换一个库（不同用户的库）',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
+                      ),
                     ],
                   ),
                   trailing: IconButton(
                     tooltip: '在资源管理器中打开',
                     icon: const Icon(Icons.open_in_new),
-                    onPressed: () => state.openInSystem(state.dataRootPath),
+                    onPressed: () => state.openInSystem(state.libraryPath),
                   ),
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.drive_file_move_outline),
-                  title: const Text('更改数据目录'),
+                  leading: const Icon(Icons.swap_horiz),
+                  title: const Text('切换 / 新建库'),
                   subtitle: const Text(
-                    '在资源管理器里选个文件夹，数据库与附件会迁移过去；迁移成功后旧目录会被删除',
+                    '选一个装着 mdiary.sqlite 的目录；空目录会新建一个空库',
                   ),
-                  onTap: () => _changeDataRoot(context, state),
+                  onTap: () => _switchLibrary(context, state),
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.storage),
-                  title: const Text('导入数据库'),
+                  leading: const Icon(Icons.library_add_outlined),
+                  title: const Text('导入新库'),
                   subtitle: const Text(
-                    '从目录里选一个 .sqlite / .db 备份，覆盖当前数据库（会先自动备份当前库）',
+                    '从目录里选一个 .sqlite / .db，作为新库导入并切换过去',
                   ),
-                  onTap: () => _importDatabase(context, state),
+                  onTap: () => _importLibrary(context, state),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.merge_type),
+                  title: const Text('合并库'),
+                  subtitle: const Text(
+                    '把另一个库按 id 合并进来（同 id 保留较新的，附件按内容去重）',
+                  ),
+                  onTap: () => _mergeLibrary(context, state),
                 ),
                 if (state.dataRootNotice != null) ...<Widget>[
                   const Divider(height: 1),
@@ -147,6 +155,20 @@ class SettingsPage extends StatelessWidget {
                     ),
                   ),
                 ],
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.folder_outlined),
+                  title: const Text('程序数据目录'),
+                  subtitle: SelectableText(
+                    state.dataRootPath,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  trailing: IconButton(
+                    tooltip: '在资源管理器中打开',
+                    icon: const Icon(Icons.open_in_new),
+                    onPressed: () => state.openInSystem(state.dataRootPath),
+                  ),
+                ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.image_outlined),
@@ -272,8 +294,87 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  /// 选目录 -> 列出目录里的库文件 -> 选一个 -> 确认覆盖 -> 导入（先自动备份旧库）。
-  static Future<void> _importDatabase(
+  /// 切换库：优先给最近用过的库，也可以选任意目录（空目录会新建空库）。
+  static Future<void> _switchLibrary(
+    BuildContext context,
+    AppState state,
+  ) async {
+    const pickOther = '__pick__';
+    final recent = state.recentLibraries;
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('切换库'),
+        children: <Widget>[
+          for (final dir in recent)
+            ListTile(
+              leading: const Icon(Icons.storage),
+              title: Text(p.basename(dir)),
+              subtitle: Text(
+                dir,
+                style: Theme.of(dialogContext).textTheme.bodySmall,
+              ),
+              selected: p.equals(dir, state.libraryPath),
+              onTap: () => Navigator.of(dialogContext).pop(dir),
+            ),
+          ListTile(
+            leading: const Icon(Icons.folder_open),
+            title: const Text('选择其他目录…'),
+            onTap: () => Navigator.of(dialogContext).pop(pickOther),
+          ),
+        ],
+      ),
+    );
+    if (choice == null || !context.mounted) return;
+    var target = choice;
+    if (choice == pickOther) {
+      final dir = await state.pickDirectory(
+        title: '选择库目录（里面放 mdiary.sqlite；空目录会新建库）',
+      );
+      if (dir == null || !context.mounted) return;
+      target = dir;
+    }
+    await _doSwitchLibrary(context, state, target);
+  }
+
+  static Future<void> _doSwitchLibrary(
+    BuildContext context,
+    AppState state,
+    String dir,
+  ) async {
+    final hasDatabase = File(
+      p.join(dir, DataRootMigration.databaseName),
+    ).existsSync();
+    if (!hasDatabase) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('这个目录里没有库'),
+          content: Text('「$dir」里没有 mdiary.sqlite。\n要在这里新建一个空库并切换过去吗？'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('新建并切换'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !context.mounted) return;
+    }
+    try {
+      await state.switchLibrary(dir);
+      if (context.mounted) _snack(context, '已切换到库：${p.basename(dir)}');
+    } catch (error) {
+      if (context.mounted) _snack(context, '切换失败：$error');
+    }
+  }
+
+  /// 导入新库：选目录 -> 选一个 .sqlite -> 起名字 -> 复制成新库并切换。
+  static Future<void> _importLibrary(
     BuildContext context,
     AppState state,
   ) async {
@@ -281,20 +382,115 @@ class SettingsPage extends StatelessWidget {
       title: '选择包含数据库文件（.sqlite / .db）的目录',
     );
     if (directory == null || !context.mounted) return;
-
     final candidates = _findDatabaseFiles(Directory(directory));
     if (!context.mounted) return;
     if (candidates.isEmpty) {
       _snack(context, '目录里没有 .sqlite / .db 文件');
       return;
     }
+    final picked = await _pickDatabaseFile(
+      context,
+      '选择要导入为新库的文件',
+      candidates,
+    );
+    if (picked == null || !context.mounted) return;
 
-    final picked = await showDialog<String>(
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => _NameDialog(
+        title: const Text('新库名字'),
+        initial: p.basenameWithoutExtension(picked),
+        hintText: '例如：张三 / 家庭 / 2026',
+        confirmLabel: '导入',
+      ),
+    );
+    if (name == null || !context.mounted) return;
+
+    try {
+      final newDir = await state.importDatabaseAsLibrary(
+        picked,
+        folderName: name,
+      );
+      if (context.mounted) {
+        _snack(context, '已导入为新库：${p.basename(newDir)}');
+      }
+    } catch (error) {
+      if (context.mounted) _snack(context, '导入失败：$error');
+    }
+  }
+
+  /// 合并库：选目录 -> 选一个 .sqlite -> 确认 -> 合并进当前库。
+  static Future<void> _mergeLibrary(
+    BuildContext context,
+    AppState state,
+  ) async {
+    final directory = await state.pickDirectory(
+      title: '选择要合并进来的库所在目录',
+    );
+    if (directory == null || !context.mounted) return;
+    final candidates = _findDatabaseFiles(Directory(directory));
+    if (!context.mounted) return;
+    if (candidates.isEmpty) {
+      _snack(context, '目录里没有 .sqlite / .db 文件');
+      return;
+    }
+    final picked = await _pickDatabaseFile(
+      context,
+      '选择要合并进当前库的文件',
+      candidates,
+    );
+    if (picked == null || !context.mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('合并到这个库？'),
+        content: Text(
+          '把「${p.basename(picked)}」合并进当前库（${p.basename(state.libraryPath)}）：\n\n'
+          '· 按日记 id 合并，同 id 保留更新时间较新的；\n'
+          '· 附件按内容哈希去重，重复内容不占第二份；\n'
+          '· 标签按名字合并；\n'
+          '· 源库不会被修改。',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('合并'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      final result = await state.mergeLibrary(picked);
+      if (context.mounted) {
+        _snack(
+          context,
+          '合并完成：新增 ${result.added} 篇、更新 ${result.updated} 篇、'
+          '附件 ${result.attachmentsAdded} 个（新增字节 ${result.blobsAdded} 份）',
+        );
+      }
+    } catch (error) {
+      if (context.mounted) _snack(context, '合并失败：$error');
+    }
+  }
+
+  static Future<String?> _pickDatabaseFile(
+    BuildContext context,
+    String title,
+    List<File> files,
+  ) {
+    return showDialog<String>(
       context: context,
       builder: (dialogContext) => SimpleDialog(
-        title: const Text('选择要导入的数据库'),
+        title: Text(title),
         children: <Widget>[
-          for (final file in candidates)
+          for (final file in files)
             ListTile(
               leading: const Icon(Icons.storage),
               title: Text(p.basename(file.path)),
@@ -305,54 +501,9 @@ class SettingsPage extends StatelessWidget {
               ),
               onTap: () => Navigator.of(dialogContext).pop(file.path),
             ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
-            child: Text(
-              '导入会用选中的库覆盖当前数据库，当前库会先自动备份。',
-              style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
-                color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
         ],
       ),
     );
-    if (picked == null || !context.mounted) return;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('导入并覆盖当前数据库？'),
-        content: Text(
-          '将用「${p.basename(picked)}」替换当前数据库 '
-          '（${state.dataRootPath}）。\n\n当前库会先备份成 '
-          'mdiary.sqlite.bak-<时间>，导入后重启数据层；导入失败会自动回滚。',
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('导入'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
-
-    try {
-      final result = await state.importDatabase(picked);
-      if (context.mounted) {
-        _snack(
-          context,
-          '已导入 ${result.entries} 篇日记；原库备份为 ${p.basename(result.backup)}',
-        );
-      }
-    } catch (error) {
-      if (context.mounted) _snack(context, '导入失败：$error');
-    }
   }
 
   /// 目录里可能放着一批备份：只挑出像数据库的文件，按修改时间倒序。
@@ -386,82 +537,64 @@ class SettingsPage extends StatelessWidget {
     return result;
   }
 
-  /// 选目录 -> 确认 -> 迁移 -> 提示结果。失败时数据仍在旧目录。
-  static Future<void> _changeDataRoot(
-    BuildContext context,
-    AppState state,
-  ) async {
-    final current = state.dataRootPath;
-    final picked = await state.pickDirectory(
-      title: '选择新的数据目录（数据库与附件会迁移到这里）',
-    );
-    if (picked == null || !context.mounted) return;
-
-    final normalized = p.canonicalize(picked);
-    if (p.equals(normalized, p.canonicalize(current))) {
-      _snack(context, '这已经是当前数据目录');
-      return;
-    }
-    final blocked = DataRootMigration.blockingReason(normalized);
-    if (blocked != null) {
-      _snack(context, blocked);
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('迁移数据目录？'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            const Text('当前目录：'),
-            SelectableText(current),
-            const SizedBox(height: 10),
-            const Text('迁移到：'),
-            SelectableText(normalized),
-            const SizedBox(height: 10),
-            const Text(
-              '会逐文件复制并校验；校验通过后切换到新目录，旧目录随之删除。'
-              '迁移过程中请不要在别处写这个库。',
-            ),
-          ],
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('开始迁移'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
-
-    try {
-      final result = await state.changeDataRoot(normalized);
-      if (context.mounted) {
-        _snack(
-          context,
-          '已迁移 ${result.files} 个文件（${formatBytes(result.bytes)}）到 ${result.target}',
-        );
-      }
-    } catch (error) {
-      if (context.mounted) {
-        _snack(context, '迁移失败：$error。数据仍在 $current');
-      }
-    }
-  }
-
   static void _snack(BuildContext context, String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(content: Text(message), duration: const Duration(seconds: 4)),
       );
+  }
+}
+
+/// 起名字的小对话框：自己管 controller，避免对话框退场时 controller 已被 dispose。
+class _NameDialog extends StatefulWidget {
+  const _NameDialog({
+    required this.title,
+    required this.initial,
+    required this.hintText,
+    required this.confirmLabel,
+  });
+
+  final Widget title;
+  final String initial;
+  final String hintText;
+  final String confirmLabel;
+
+  @override
+  State<_NameDialog> createState() => _NameDialogState();
+}
+
+class _NameDialogState extends State<_NameDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: widget.title,
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: InputDecoration(hintText: widget.hintText),
+        onSubmitted: (value) => Navigator.of(context).pop(value),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: Text(widget.confirmLabel),
+        ),
+      ],
+    );
   }
 }

@@ -447,7 +447,7 @@ void main() {
     expect(button.right, lessThanOrEqualTo(tester.view.physicalSize.width));
   }, skip: skipWidgetTests);
 
-  testWidgets('设置页「更改数据目录」选到同一目录时只提示，不迁移', (tester) async {
+  testWidgets('设置页展示当前库与库操作入口', (tester) async {
     tester.view.physicalSize = const Size(1280, 1600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -465,24 +465,12 @@ void main() {
           matching: find.byType(Scrollable),
         )
         .first;
-    await tester.scrollUntilVisible(
-      find.text('更改数据目录'),
-      200,
-      scrollable: scrollable,
-    );
-
-    nextDirectory = tempDir.path; // 与当前数据目录相同
-    await tester.tap(find.text('更改数据目录'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('这已经是当前数据目录'), findsOneWidget);
-    expect(state.dataRootPath, tempDir.path);
-
-    // 放掉 SnackBar 的自动关闭计时器
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pumpAndSettle();
+    for (final label in <String>['当前库', '切换 / 新建库', '导入新库', '合并库']) {
+      await tester.scrollUntilVisible(find.text(label), 200, scrollable: scrollable);
+      expect(find.text(label), findsOneWidget, reason: '缺少「$label」入口');
+    }
+    expect(find.text(state.libraryPath), findsWidgets, reason: '要显示当前库路径');
   }, skip: skipWidgetTests);
-
   testWidgets('左侧日历：切到上个月点 15 号，新建那天的日记', (tester) async {
     await pumpApp(tester);
     final calendar = find.byType(MonthCalendar);

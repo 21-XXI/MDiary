@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -115,6 +116,9 @@ class AppPaths {
   static const String databaseDirName = 'db';
   static const String databaseFileName = 'mdiary.sqlite';
 
+  /// 库列表记录（当前库 + 最近用过的库）。
+  static const String librariesFileName = 'libraries.json';
+
   /// 没有稳定「程序目录」的宿主进程（单测 / dart run），不能拿它做便携目录。
   static const List<String> _testHosts = <String>[
     'flutter_tester',
@@ -173,19 +177,93 @@ class AppPaths {
     adopt(DataRoot(path: normalized, source: DataRootSource.userChosen));
   }
 
-  /// 数据库文件位置：`<数据目录>/db/mdiary.sqlite`。
-  static String get databaseFile => databaseFileIn(root.path);
+  /// 默认库目录：`<数据目录>/db`（首次启动用）。
+  static String get defaultLibraryDir => p.join(root.path, databaseDirName);
 
+  /// 是否已经初始化过（UI 在 init 之前读取路径时要先判断）。
+  static bool get isInitialized => _initialized;
+
+  /// 当前库目录。用户可以在设置里换到任意目录（就是一个普通文件夹，里面放 `mdiary.sqlite`）。
+  static String get libraryDir =>
+      _libraryDir.isEmpty ? defaultLibraryDir : _libraryDir;
+
+  static String _libraryDir = '';
+
+  /// 库列表/当前库的记录文件（放在程序数据目录里，跟着数据目录走）。
+  static File get librariesFile => File(p.join(root.path, librariesFileName));
+
+  /// 启动时读回上次选中的库目录；没记录过就用默认 `db/`。
+  static void loadLibrary() {
+    _libraryDir = '';
+    final file = librariesFile;
+    if (!file.existsSync()) return;
+    try {
+      final decoded = jsonDecode(file.readAsStringSync());
+      if (decoded is! Map<String, dynamic>) return;
+      final current = (decoded['current'] as String?)?.trim() ?? '';
+      if (current.isNotEmpty) _libraryDir = p.canonicalize(current);
+    } on Object {
+      _libraryDir = '';
+    }
+  }
+
+  /// 最近用过的库目录（最多 8 个），供设置页快速切换。
+  static List<String> loadRecentLibraries() {
+    final file = librariesFile;
+    if (!file.existsSync()) return const <String>[];
+    try {
+      final decoded = jsonDecode(file.readAsStringSync());
+      if (decoded is! Map<String, dynamic>) return const <String>[];
+      final list = decoded['recent'];
+      if (list is! List) return const <String>[];
+      return list.whereType<String>().take(8).toList(growable: false);
+    } on Object {
+      return const <String>[];
+    }
+  }
+
+  /// 切换库目录并记住（目录不存在时创建）。
+  static Future<void> adoptLibrary(String dirPath) async {
+    final normalized = p.canonicalize(dirPath);
+    Directory(normalized).createSync(recursive: true);
+    _libraryDir = normalized;
+    final recent = <String>[
+      normalized,
+      ...loadRecentLibraries().where(
+        (item) => !p.equals(item, normalized),
+      ),
+    ].take(8).toList(growable: false);
+    final file = librariesFile;
+    file.parent.createSync(recursive: true);
+    await file.writeAsString(
+      jsonEncode(<String, Object>{'current': normalized, 'recent': recent}),
+      flush: true,
+    );
+  }
+
+  /// 库目录里的数据库文件路径。
+  static String libraryDatabaseFileIn(String dirPath) =>
+      p.join(dirPath, databaseFileName);
+
+  /// 当前库的数据库文件。
+  static String get databaseFile => libraryDatabaseFileIn(libraryDir);
+
+  /// 默认布局下（`<数据目录>/db/mdiary.sqlite`）的路径；迁移/测试用。
   static String databaseFileIn(String rootPath) =>
       p.join(rootPath, databaseDirName, databaseFileName);
 
-  static String get databaseDirectory => p.join(root.path, databaseDirName);
+  static String get databaseDirectory => libraryDir;
 
   /// 老版本把 `mdiary.sqlite` 直接放在数据目录根：升级到 `db/` 子目录（幂等）。
   ///
+  /// 只在用默认库目录时执行；用户已经指定了自定义库目录就跳过。
   /// 在打开数据库之前调用；WAL/SHM 一起搬，避免丢事务。
   static void migrateLegacyDatabaseLayout() {
-    final target = File(databaseFile);
+    if (_libraryDir.isNotEmpty &&
+        !p.equals(p.canonicalize(_libraryDir), p.canonicalize(defaultLibraryDir))) {
+      return;
+    }
+    final target = File(databaseFileIn(root.path));
     if (target.existsSync()) return;
     final legacy = File(p.join(root.path, databaseFileName));
     if (!legacy.existsSync()) return;

@@ -21,6 +21,28 @@ import '../data/tag_repository.dart';
 
 enum SaveStatus { idle, dirty, saving, saved, error }
 
+/// 一次「合并库」的统计。
+class LibraryMergeResult {
+  const LibraryMergeResult({
+    required this.added,
+    required this.updated,
+    required this.attachmentsAdded,
+    required this.blobsAdded,
+  });
+
+  /// 新加入的日记数。
+  final int added;
+
+  /// 因源库更新而覆盖的日记数。
+  final int updated;
+
+  /// 新增的附件索引条数（同 sha 共用字节）。
+  final int attachmentsAdded;
+
+  /// 新写入的附件字节份数（内容去重后）。
+  final int blobsAdded;
+}
+
 /// 一次「导入数据库」的结果。
 class DatabaseImportResult {
   const DatabaseImportResult({
@@ -711,6 +733,216 @@ class AppState extends ChangeNotifier {
         await entity.copy(out.path);
       }
     }
+  }
+
+  // ───────────────────────────── 库（可切换的数据库） ─────────────────────────────
+
+  /// 当前库目录（里面放着 `mdiary.sqlite`）。
+  String get libraryPath => AppPaths.isInitialized
+      ? AppPaths.libraryDir
+      : p.join(dataRootPath, 'db');
+
+  /// 最近用过的库目录（设置页快速切换）。
+  List<String> get recentLibraries =>
+      AppPaths.isInitialized ? AppPaths.loadRecentLibraries() : const <String>[];
+
+  /// 切换库：目录里已有 `mdiary.sqlite` 就用它，没有就新建一个空库。
+  Future<void> switchLibrary(String dirPath) async {
+    final oldDir = AppPaths.libraryDir;
+    final normalized = p.canonicalize(dirPath);
+    if (p.equals(normalized, p.canonicalize(oldDir))) {
+      throw const DataRootMigrationException('这已经是当前库');
+    }
+    final target = File(AppPaths.libraryDatabaseFileIn(normalized));
+    if (target.existsSync()) {
+      final info = AppDatabase.inspect(target.path);
+      if (!info.ok) {
+        throw DataRootMigrationException('这个库不可用：${info.integrity}');
+      }
+      if (info.version > AppDatabase.schemaVersion) {
+        throw DataRootMigrationException(
+          '这个库来自更新的版本（schema v${info.version}）',
+        );
+      }
+    }
+    Directory(normalized).createSync(recursive: true);
+
+    await flushNow();
+    _saveDebounce?.cancel();
+    _searchDebounce?.cancel();
+    db.checkpoint();
+    db.dispose();
+
+    AppDatabase? opened;
+    try {
+      opened = AppDatabase.open(target.path);
+      await AppPaths.adoptLibrary(normalized);
+      _rebind(dataRootPath, opened);
+      opened = null;
+      await store.backfillFromFiles();
+      await bootstrap();
+    } catch (error) {
+      opened?.dispose();
+      try {
+        await AppPaths.adoptLibrary(oldDir);
+      } on Object {
+        // 记不住也没关系，至少把数据连接切回去
+      }
+      _rebind(
+        dataRootPath,
+        AppDatabase.open(AppPaths.libraryDatabaseFileIn(oldDir)),
+      );
+      await bootstrap();
+      throw DataRootMigrationException('切换库失败，已回到原来的库：$error');
+    }
+  }
+
+  /// 把一个外部 `.sqlite` 作为新库导入：复制到 `<数据目录>/libraries/<名字>/` 并切换过去。
+  /// 返回新库目录。
+  Future<String> importDatabaseAsLibrary(
+    String sqlitePath, {
+    String? folderName,
+  }) async {
+    final source = File(sqlitePath);
+    if (!source.existsSync()) {
+      throw const DataRootMigrationException('找不到数据库文件');
+    }
+    final info = AppDatabase.inspect(source.path);
+    if (!info.ok) {
+      throw DataRootMigrationException('这不是可用的 SQLite 数据库：${info.integrity}');
+    }
+    if (info.version > AppDatabase.schemaVersion) {
+      throw DataRootMigrationException(
+        '这个库来自更新的版本（schema v${info.version}）',
+      );
+    }
+
+    final rawName = (folderName ?? p.basenameWithoutExtension(source.path))
+        .trim();
+    final base = _safeFolderName(rawName.isEmpty ? '导入的库' : rawName);
+    final parent = p.join(AppPaths.root.path, 'libraries');
+    Directory(parent).createSync(recursive: true);
+    final dir = _uniqueDirectory(parent, base);
+    Directory(dir).createSync(recursive: true);
+    source.copySync(AppPaths.libraryDatabaseFileIn(dir));
+    await switchLibrary(dir);
+    return dir;
+  }
+
+  /// 把另一个库合并进当前库：按 id 去重，同 id 保留 `updated_at` 较新的；
+  /// 附件按 sha256 去重（字节只存一份），标签按名字合并。
+  Future<LibraryMergeResult> mergeLibrary(String sqlitePath) async {
+    final source = File(
+      File(sqlitePath).existsSync()
+          ? sqlitePath
+          : p.join(sqlitePath, AppPaths.databaseFileName),
+    );
+    if (!source.existsSync()) {
+      throw const DataRootMigrationException('找不到要合并的库');
+    }
+    if (p.equals(p.canonicalize(source.path), p.canonicalize(AppPaths.databaseFile))) {
+      throw const DataRootMigrationException('不能把库和自己合并');
+    }
+    final info = AppDatabase.inspect(source.path);
+    if (!info.ok) {
+      throw DataRootMigrationException('要合并的库不可用：${info.integrity}');
+    }
+    if (info.version > AppDatabase.schemaVersion) {
+      throw DataRootMigrationException(
+        '要合并的库来自更新的版本（schema v${info.version}）',
+      );
+    }
+
+    final blobsBefore = attachmentRepo.blobCount();
+    final escaped = source.path.replaceAll("'", "''");
+    var added = 0;
+    var updated = 0;
+    var attachmentsAdded = 0;
+    db.raw.execute("ATTACH DATABASE '$escaped' AS src");
+    try {
+      db.raw.execute('BEGIN');
+      // 附件字节：按 sha 去重
+      db.raw.execute(
+        'INSERT OR IGNORE INTO attachment_blobs (sha256, size, bytes) '
+        'SELECT sha256, size, bytes FROM src.attachment_blobs',
+      );
+      // 新条目
+      db.raw.execute(
+        'INSERT INTO entries '
+        '(id, title, body_md, entry_date, created_at, updated_at, rev, pinned, device_id, deleted_at) '
+        'SELECT id, title, body_md, entry_date, created_at, updated_at, rev, pinned, device_id, deleted_at '
+        'FROM src.entries WHERE id NOT IN (SELECT id FROM entries)',
+      );
+      added = db.raw.updatedRows;
+      // 同 id 且源库更新 -> 覆盖
+      db.raw.execute(
+        'UPDATE entries SET '
+        'title = (SELECT s.title FROM src.entries s WHERE s.id = entries.id), '
+        'body_md = (SELECT s.body_md FROM src.entries s WHERE s.id = entries.id), '
+        'entry_date = (SELECT s.entry_date FROM src.entries s WHERE s.id = entries.id), '
+        'updated_at = (SELECT s.updated_at FROM src.entries s WHERE s.id = entries.id), '
+        'rev = (SELECT s.rev FROM src.entries s WHERE s.id = entries.id), '
+        'pinned = (SELECT s.pinned FROM src.entries s WHERE s.id = entries.id), '
+        'device_id = (SELECT s.device_id FROM src.entries s WHERE s.id = entries.id), '
+        'deleted_at = (SELECT s.deleted_at FROM src.entries s WHERE s.id = entries.id) '
+        'WHERE id IN (SELECT s.id FROM src.entries s WHERE s.updated_at > entries.updated_at)',
+      );
+      updated = db.raw.updatedRows;
+      // 附件索引：同 (entry_id, sha) 不重复插
+      db.raw.execute(
+        'INSERT INTO attachments (id, entry_id, sha256, filename, mime, size_bytes, created_at) '
+        'SELECT s.id, s.entry_id, s.sha256, s.filename, s.mime, s.size_bytes, s.created_at '
+        'FROM src.attachments s '
+        'WHERE EXISTS (SELECT 1 FROM entries e WHERE e.id = s.entry_id) '
+        'AND NOT EXISTS (SELECT 1 FROM attachments a '
+        'WHERE a.entry_id = s.entry_id AND a.sha256 = s.sha256)',
+      );
+      attachmentsAdded = db.raw.updatedRows;
+      // 标签：按名字合并，再把 entry_tags 映射到本库的 tag id
+      db.raw.execute(
+        'INSERT OR IGNORE INTO tags (id, name) SELECT id, name FROM src.tags',
+      );
+      db.raw.execute(
+        'INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) '
+        'SELECT et.entry_id, '
+        '(SELECT t2.id FROM tags t2 WHERE t2.name = '
+        '(SELECT st.name FROM src.tags st WHERE st.id = et.tag_id)) '
+        'FROM src.entry_tags et '
+        'WHERE EXISTS (SELECT 1 FROM entries e WHERE e.id = et.entry_id) '
+        'AND (SELECT st.name FROM src.tags st WHERE st.id = et.tag_id) IS NOT NULL',
+      );
+      db.raw.execute('COMMIT');
+    } catch (error) {
+      db.raw.execute('ROLLBACK');
+      rethrow;
+    } finally {
+      db.raw.execute('DETACH DATABASE src');
+    }
+
+    await store.backfillFromFiles();
+    await refresh();
+    return LibraryMergeResult(
+      added: added,
+      updated: updated,
+      attachmentsAdded: attachmentsAdded,
+      blobsAdded: attachmentRepo.blobCount() - blobsBefore,
+    );
+  }
+
+  static String _safeFolderName(String name) => name
+      .replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F]'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim()
+      .replaceAll(RegExp(r'[. ]+$'), '');
+
+  static String _uniqueDirectory(String parent, String base) {
+    var candidate = p.join(parent, base);
+    if (!Directory(candidate).existsSync()) return candidate;
+    for (var index = 2; index < 1000; index++) {
+      candidate = p.join(parent, '$base ($index)');
+      if (!Directory(candidate).existsSync()) return candidate;
+    }
+    return p.join(parent, '$base-${DateTime.now().millisecondsSinceEpoch}');
   }
 
   /// 换一套连接/仓库/附件库，并把界面状态复位到「刚打开新库」。

@@ -11,6 +11,7 @@ v1.0 目标平台：**Windows 10/11 x64**（后续 v2.0 移植 Android/iOS/macOS
 - 时间轴列表、置顶、软删除与回收站
 - 左栏月历：点某天即打开/新建那天的日记，有日记的日期带小圆点，默认停在最新一天
 - 标签：编辑器里给日记打标签，列表角标可见，搜索框能按标签搜；导出写进 front matter
+- 多库：一个目录 = 一个库（不同用户的库），可切换/新建/导入新库，也能按 id 合并两个库（附件按内容去重）
 - 星图：把日记与它索引的附件画成星空，按全部 / 年 / 月 / 周浏览，点星即查看编辑
 - 附件按内容哈希去重：同一张图被多篇日记引用也只存一份；导出时每篇 `.md` 都带着它
 - 附件字节存进 SQLite（`attachment_blobs`，单文件 ≤ 100 MB），磁盘目录只是可重建的缓存
@@ -63,7 +64,8 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Clean   # 清理后�
 
 | 内容 | 路径 |
 |---|---|
-| 数据库 | `<exe 目录>\MDiaryData\db\mdiary.sqlite`（默认，单独一个 `db\` 子目录） |
+| 数据库 | `<exe 目录>\MDiaryData\db\mdiary.sqlite`（默认库；设置里可换到任意目录） |
+| 库列表 | `<exe 目录>\MDiaryData\libraries.json`（当前库 + 最近用过的库） |
 | 附件缓存 | `<exe 目录>\MDiaryData\attachments\<sha256前两位>\<sha256>.<ext>`（字节在库里，删了会自动重建） |
 | 错误日志 | `<exe 目录>\MDiaryData\logs\error.log`（发生异常时才创建，超过 1 MB 轮转为 `error.log.old`） |
 | 位置记忆 | `<exe 目录>\mdiary-location.txt`（设置页改过数据目录后才出现） |

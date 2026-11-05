@@ -101,8 +101,10 @@
   `db/mdiary.sqlite`（数据库，含附件字节）+ `attachments/`（预览/打开缓存，可重建）+ `logs/`。
   老版本放在根目录的 `mdiary.sqlite` 会在启动时自动搬进 `db/`。
   设置页可换目录并迁移，指针存在 `<exe 目录>/mdiary-location.txt`；`MDIARY_HOME` 可覆盖；目录不可写时逐级回退。
-- 导入/备份：设置 → 数据 → 「导入数据库」可从任意目录挑一个 `.sqlite`/`.db` 覆盖当前库
-  （覆盖前自动备份为 `mdiary.sqlite.bak-<时间>`，失败自动回滚）。
+- 多库：一个目录 = 一个库（`<目录>/mdiary.sqlite`）。设置 → 数据 可「切换 / 新建库」、
+  「导入新库」（复制到 `MDiaryData/libraries/<名字>/` 并切换）、「合并库」（按 id 合并，
+  同 id 保留 updated_at 较新的，附件按 sha256 去重，标签按名字合并）。当前库与最近库记在
+  `MDiaryData/libraries.json`；默认库仍是 `MDiaryData/db`。
 
 ### 7.4 Git 与审查规范
 - 分支：`main` 受保护；特性分支 `feat/xxx`、`fix/xxx`；提交信息走 Conventional Commits。

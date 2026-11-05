@@ -4,7 +4,6 @@ library;
 import 'dart:ffi' hide Size;
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mdiary/core/app_paths.dart';
 import 'package:mdiary/data/attachment_repository.dart';
@@ -14,8 +13,6 @@ import 'package:mdiary/data/database.dart';
 import 'package:mdiary/data/entry_repository.dart';
 import 'package:mdiary/data/markdown_io.dart';
 import 'package:mdiary/data/meta_repository.dart';
-import 'package:mdiary/features/settings_page.dart';
-import 'package:mdiary/state/app_scope.dart';
 import 'package:mdiary/state/app_state.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/open.dart';
@@ -153,60 +150,7 @@ void main() {
     expect(state.dataRootPath, oldRoot.path);
   }, skip: skip);
 
-  testWidgets('设置页「更改数据目录」-> 确认 -> 真的迁移过去', (tester) async {
-    await state.createEntry();
-    state.draftChanged(title: '界面迁移', body: '正文', immediate: true);
-    await state.flushNow();
 
-    tester.view.physicalSize = const Size(1200, 900);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    await tester.pumpWidget(
-      AppScope(
-        state: state,
-        child: const MaterialApp(home: SettingsPage()),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.scrollUntilVisible(
-      find.text('更改数据目录'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.tap(find.text('更改数据目录'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('迁移数据目录？'), findsOneWidget);
-    expect(find.textContaining(p.canonicalize(newRoot.path)), findsWidgets);
-
-    // 迁移是真实文件 IO。点「开始迁移」后，继续推进要「真实等待 + pump」交替：
-    // 只 runAsync 不会让 fake-async 区的后续微任务跑起来，只 pump 又等不到磁盘 IO。
-    await tester.runAsync(() async {
-      await tester.tap(find.widgetWithText(FilledButton, '开始迁移'));
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    });
-    final target = p.canonicalize(newRoot.path);
-    for (var i = 0; i < 100; i++) {
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)),
-      );
-      await tester.pump();
-      if (state.dataRootPath == target) break;
-    }
-    await tester.pumpAndSettle();
-
-    expect(state.dataRootPath, target);
-    expect(File(DataRootMigration.databaseFileIn(target)).existsSync(), isTrue);
-    expect(state.entries.single.title, '界面迁移');
-    expect(tester.takeException(), isNull);
-
-    // 放掉 SnackBar 的自动关闭计时器
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pumpAndSettle();
-  }, skip: skip);
 }
 
 String? _locateSqlite3() {
