@@ -7,19 +7,19 @@
 
 | # | 问题 | 现状 | 建议修法 | 严重度 |
 |---|---|---|---|---|
-| A1 | 多实例无互斥 | 双开两个 `mdiary.exe` 会共享同一 SQLite 文件（WAL 允许并发写），两窗口各自编辑可能互相覆盖，且用户毫无提示 | 启动时创建命名 Mutex（`Global\MDiary.SingleInstance`），已被占用则激活既有窗口后退出 | 中 |
-| A2 | 打开附件的实现依赖 shell | `Process.start('cmd', ['/c','start','',path])`。附件路径是 `<hash>.<ext>`（安全），但「打开数据目录」用的是 `%APPDATA%` 路径，用户名含 `&`/`%` 等字符时可能打不开 | 改用 `rundll32 url.dll,FileProtocolHandler "<path>"`，或用 FFI 调 `ShellExecuteW`（不经过 cmd 解析） | 低 |
-| A3 | 删除即导出可能导到旧内容 | `exportCurrent` 在 `findById` 返回 null 时回退到内存中的旧对象，条目已被别处删除时仍会写出文件 | 返回 null 并提示「条目已删除」，避免导出幽灵内容 | 低 |
-| A4 | 导入无单文件上限 | 导入 `.md` 时全量读入内存，没有大小检查（导出/附件有 25MB 限制，正文没有） | 大于 10MB 的 `.md` 跳过并计入 `ImportResult.errors` | 低 |
+| A1 ✅ 已修（v1.1） | 多实例无互斥 | 双开两个 `mdiary.exe` 会共享同一 SQLite 文件（WAL 允许并发写），两窗口各自编辑可能互相覆盖，且用户毫无提示 | 启动时创建命名 Mutex（`Global\MDiary.SingleInstance`），已被占用则激活既有窗口后退出 | 中 |
+| A2 ✅ 已修（v1.1） | 打开附件的实现依赖 shell | `Process.start('cmd', ['/c','start','',path])`。附件路径是 `<hash>.<ext>`（安全），但「打开数据目录」用的是 `%APPDATA%` 路径，用户名含 `&`/`%` 等字符时可能打不开 | 改用 `rundll32 url.dll,FileProtocolHandler "<path>"`，或用 FFI 调 `ShellExecuteW`（不经过 cmd 解析） | 低 |
+| A3 ✅ 已修（v1.1） | 删除即导出可能导到旧内容 | `exportCurrent` 在 `findById` 返回 null 时回退到内存中的旧对象，条目已被别处删除时仍会写出文件 | 返回 null 并提示「条目已删除」，避免导出幽灵内容 | 低 |
+| A4 ✅ 已修（v1.1） | 导入无单文件上限 | 导入 `.md` 时全量读入内存，没有大小检查（导出/附件有 25MB 限制，正文没有） | 大于 10MB 的 `.md` 跳过并计入 `ImportResult.errors` | 低 |
 
 ## B. 体验补齐（不改架构）
 
 | # | 问题 | 建议 |
 |---|---|---|
-| B1 | 附件只能点按钮选 / 拖拽 | 拖拽已用 runner 原生 `WM_DROPFILES` 实现（不引插件）；**剪贴板粘贴截图仍未做**，需读 CF_DIB/CF_BITMAP 编码 PNG（GDI+ 或 WIC） |
-| B2 | 回收站只能逐条删除 | 增加「清空回收站」批量操作（沿用 `purgeEntry` 的 GC 逻辑） |
+| B1 ✅ 已做（v1.1：拖拽 + 粘贴截图） | 附件只能点按钮选 / 拖拽 | 拖拽已用 runner 原生 `WM_DROPFILES` 实现（不引插件）；**剪贴板粘贴截图仍未做**，需读 CF_DIB/CF_BITMAP 编码 PNG（GDI+ 或 WIC） |
+| B2 ✅ 已做（v1.1：清空回收站） | 回收站只能逐条删除 | 增加「清空回收站」批量操作（沿用 `purgeEntry` 的 GC 逻辑） |
 | B3 | 窗口尺寸/位置不记忆 | 退出时把 `window_manager` 的 bounds 存入 `app_meta`，启动恢复 |
-| B4 | 无最小窗口尺寸 | 窗口可缩到极小，标题栏几乎无法点击；可在 runner 的 `WM_GETMINMAXINFO` 限制 720×520 |
+| B4 ✅ 已做（v1.1：720×520 最小尺寸） | 无最小窗口尺寸 | 窗口可缩到极小，标题栏几乎无法点击；可在 runner 的 `WM_GETMINMAXINFO` 限制 720×520 |
 | B5 | 导出附件名是哈希 | `assets/<hash>.<ext>` 可读性差；可改为 `<slug>-<hash8>.<ext>`，同时保留原文件名在 front matter |
 | B6 | 回收站无「最近删除时间」排序切换 | 目前固定按 `deleted_at DESC`，够用 |
 

@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import '../core/app_paths.dart';
 import '../core/clipboard_image.dart';
 import '../core/ids.dart';
+import '../core/system_open.dart';
 import '../data/attachment_repository.dart';
 import '../data/attachment_store.dart';
 import '../data/data_root_migration.dart';
@@ -549,20 +550,11 @@ class AppState extends ChangeNotifier {
     return attached;
   }
 
-  /// 交给系统默认程序打开（附件预览、数据目录）。
+  /// 交给系统默认程序打开（附件预览、数据目录、URL）。
+  ///
+  /// Windows 走 runner 的 ShellExecuteW（不经过 cmd 解析），其它平台用 open/xdg-open。
   Future<void> openInSystem(String path) async {
-    if (Platform.isWindows) {
-      await Process.start('cmd', <String>[
-        '/c',
-        'start',
-        '',
-        path,
-      ], runInShell: false);
-    } else if (Platform.isMacOS) {
-      await Process.start('open', <String>[path]);
-    } else {
-      await Process.start('xdg-open', <String>[path]);
-    }
+    await SystemOpen.open(path);
   }
 
   // ───────────────────────────── 导入 / 导出 ─────────────────────────────
@@ -978,7 +970,11 @@ class AppState extends ChangeNotifier {
     final dir = await pickDirectory(title: '选择导出目录');
     if (dir == null) return null;
     await flushNow();
-    final fresh = entryRepo.findById(entry.id) ?? entry;
+    // 条目可能已被删除（回收站或别处）：不能拿内存里的旧对象导出「幽灵内容」。
+    final fresh = entryRepo.findById(entry.id);
+    if (fresh == null || fresh.isDeleted) {
+      throw StateError('这篇日记已被删除，无法导出');
+    }
     return markdownIo.exportEntry(fresh, dir);
   }
 
@@ -995,6 +991,23 @@ class AppState extends ChangeNotifier {
     final result = await markdownIo.importDirectory(dir, deviceId: deviceId);
     await refresh();
     return result;
+  }
+
+  // ───────────────────────────── 回收站 ─────────────────────────────
+
+  /// 清空回收站：逐条彻底删除并回收孤儿附件；返回删除的条数。
+  Future<int> purgeAllDeleted() async {
+    final list = deletedEntries();
+    if (list.isEmpty) return 0;
+    for (final entry in list) {
+      attachmentRepo.deleteByEntry(entry.id);
+      entryRepo.purge(entry.id);
+      if (entry.id == _selected?.id) _selected = null;
+    }
+    await collectGarbage();
+    await refresh();
+    notifyListeners();
+    return list.length;
   }
 
   // ───────────────────────────── 设置 ─────────────────────────────

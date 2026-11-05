@@ -42,6 +42,10 @@ class FlutterWindow : public Win32Window {
   // Clipboard image read, encoded as PNG (paste screenshot, Windows only).
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       clipboard_channel_;
+
+  // Open a file/folder/URL with ShellExecuteW (no cmd parsing).
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      shell_channel_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

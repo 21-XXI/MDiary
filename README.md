@@ -1,11 +1,11 @@
 # MDiary — 跨平台 .md 日记程序
 
-v1.0 目标平台：**Windows 10/11 x64**（后续 v2.0 移植 Android/iOS/macOS/Linux）。
+v1.1 目标平台：**Windows 10/11 x64**（后续 v2.0 移植 Android/iOS/macOS/Linux）。
 
 日记以 Markdown 明文保存，本地 SQLite 为唯一真源，附件按内容哈希去重存放，可随时导出为
 通用的 `.md` 目录，不被任何厂商锁定。
 
-## 功能（v1.0）
+## 功能（v1.1）
 
 - Markdown 编辑 + 实时预览（分栏 / 纯预览切换），自动保存，异常退出不丢稿
 - 时间轴列表、置顶、软删除与回收站

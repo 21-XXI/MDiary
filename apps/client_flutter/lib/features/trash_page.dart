@@ -35,7 +35,19 @@ class _TrashPageState extends State<TrashPage> {
     final theme = Theme.of(context);
     final state = AppScope.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('回收站'), centerTitle: false),
+      appBar: AppBar(
+        title: const Text('回收站'),
+        centerTitle: false,
+        actions: <Widget>[
+          if (_entries.isNotEmpty)
+            TextButton.icon(
+              onPressed: _confirmPurgeAll,
+              icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+              label: const Text('清空'),
+            ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: _entries.isEmpty
           ? const EmptyState(
               icon: Icons.delete_outline,
@@ -90,6 +102,41 @@ class _TrashPageState extends State<TrashPage> {
               },
             ),
     );
+  }
+
+  Future<void> _confirmPurgeAll() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('清空回收站？'),
+        content: Text('将永久删除回收站里的 ${_entries.length} 篇日记及其附件，无法恢复。'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('清空'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final removed = await AppScope.of(context).purgeAllDeleted();
+    if (!mounted) return;
+    _reload();
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('已清除 $removed 篇日记'),
+          duration: const Duration(seconds: 3),
+        ),
+      );
   }
 
   Future<void> _confirmPurge(Entry entry, String title) async {

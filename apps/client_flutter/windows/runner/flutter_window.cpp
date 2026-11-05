@@ -94,6 +94,23 @@ bool ReadClipboardImagePng(std::vector<uint8_t>* out) {
   return ok && !out->empty();
 }
 
+// Opens a file/folder/URL through ShellExecuteW. Paths never go through
+// cmd.exe parsing, so spaces, quotes and '&' are safe.
+bool OpenWithShell(const std::string& utf8_path) {
+  const int length =
+      MultiByteToWideChar(CP_UTF8, 0, utf8_path.c_str(), -1, nullptr, 0);
+  if (length <= 1) {
+    return false;
+  }
+  std::wstring wide(static_cast<size_t>(length), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, utf8_path.c_str(), -1, wide.data(), length);
+  wide.resize(static_cast<size_t>(length) - 1);
+  const HINSTANCE result =
+      ShellExecuteW(nullptr, L"open", wide.c_str(), nullptr, nullptr,
+                    SW_SHOWNORMAL);
+  return reinterpret_cast<INT_PTR>(result) > 32;
+}
+
 }  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -147,6 +164,27 @@ bool FlutterWindow::OnCreate() {
         result->NotImplemented();
       });
 
+  // Open files/folders/URLs through ShellExecuteW.
+  shell_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(), "mdiary/shell",
+          &flutter::StandardMethodCodec::GetInstance());
+  shell_channel_->SetMethodCallHandler(
+      [](const flutter::MethodCall<flutter::EncodableValue>& call,
+         std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+             result) {
+        if (call.method_name() == "open") {
+          const auto* path = std::get_if<std::string>(call.arguments());
+          if (path == nullptr) {
+            result->Error("bad-args", "path is required");
+            return;
+          }
+          result->Success(flutter::EncodableValue(OpenWithShell(*path)));
+          return;
+        }
+        result->NotImplemented();
+      });
+
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -165,6 +203,7 @@ void FlutterWindow::OnDestroy() {
   DragAcceptFiles(GetHandle(), FALSE);
   drop_channel_.reset();
   clipboard_channel_.reset();
+  shell_channel_.reset();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
@@ -204,6 +243,23 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     if (result) {
       return *result;
     }
+  }
+
+  if (message == WM_GETMINMAXINFO) {
+    auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
+    UINT dpi = 96;
+    HMODULE user32 = ::GetModuleHandleW(L"user32.dll");
+    if (user32 != nullptr) {
+      auto get_dpi = reinterpret_cast<UINT(WINAPI*)(HWND)>(
+          ::GetProcAddress(user32, "GetDpiForWindow"));
+      if (get_dpi != nullptr) {
+        dpi = get_dpi(hwnd);
+      }
+    }
+    const double scale = dpi == 0 ? 1.0 : dpi / 96.0;
+    info->ptMinTrackSize.x = static_cast<LONG>(720 * scale);
+    info->ptMinTrackSize.y = static_cast<LONG>(520 * scale);
+    return 0;
   }
 
   if (message == WM_DROPFILES) {

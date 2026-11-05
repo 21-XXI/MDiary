@@ -49,6 +49,9 @@ class MarkdownIo {
   final AttachmentRepository attachments;
   final AttachmentStore store;
 
+  /// 单个 `.md` 的导入上限：超过就跳过（避免把一个超大文件整个读进内存）。
+  static const int maxMarkdownBytes = 10 * 1024 * 1024;
+
   /// 标签仓储；为 null 时导出不写 tags、导入不落标签（老调用方兼容）。
   final TagRepository? tags;
 
@@ -153,6 +156,10 @@ class MarkdownIo {
     for (final file in files) {
       try {
         final stat = await file.stat();
+        if (stat.size > maxMarkdownBytes) {
+          errors.add('${p.basename(file.path)}: 超过 10 MB，已跳过');
+          continue;
+        }
         final content = await file.readAsString();
         final doc = parseMarkdownDocument(content, debugName: file.path);
         // 与导出侧保持一致：尾部空行不影响内容判定，否则「导出再导入」会被当成新条目

@@ -5,12 +5,46 @@
 #include "flutter_window.h"
 #include "utils.h"
 
+namespace {
+
+// Single-instance guard: the first process creates the mutex, later ones
+// bring the existing window forward and exit. Named "Global\" so it also
+// works when the app is launched from different sessions/desktops.
+HANDLE AcquireSingleInstanceMutex() {
+  HANDLE mutex = ::CreateMutexW(nullptr, TRUE, L"Global\\MDiary.SingleInstance");
+  if (mutex == nullptr) {
+    return nullptr;
+  }
+  if (::GetLastError() == ERROR_ALREADY_EXISTS) {
+    ::CloseHandle(mutex);
+    return nullptr;
+  }
+  return mutex;
+}
+
+void FocusExistingWindow() {
+  HWND existing = ::FindWindowW(nullptr, L"MDiary");
+  if (existing == nullptr) {
+    return;
+  }
+  ::ShowWindow(existing, SW_RESTORE);
+  ::SetForegroundWindow(existing);
+}
+
+}  // namespace
+
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
   // Attach to console when present (e.g., 'flutter run') or create a
   // new console when running with a debugger.
   if (!::AttachConsole(ATTACH_PARENT_PROCESS) && ::IsDebuggerPresent()) {
     CreateAndAttachConsole();
+  }
+
+  HANDLE single_instance = AcquireSingleInstanceMutex();
+  if (single_instance == nullptr) {
+    FocusExistingWindow();
+    return EXIT_SUCCESS;
   }
 
   // Initialize COM, so that it is available for use in the library and/or
@@ -39,5 +73,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   }
 
   ::CoUninitialize();
+  if (single_instance != nullptr) {
+    ::ReleaseMutex(single_instance);
+    ::CloseHandle(single_instance);
+  }
   return EXIT_SUCCESS;
 }
