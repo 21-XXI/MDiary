@@ -238,16 +238,20 @@ void main() {
     expect(state.entryRepo.findById(firstId), isNotNull);
   }, skip: skipWidgetTests);
 
-  testWidgets('超过 25 MB 的附件被拒绝，且不写库', (tester) async {
+  testWidgets('超过上限的附件被拒绝，且不写库', (tester) async {
     await pumpApp(tester);
     await createEntry(tester);
-    // 26 MB 全零字节，仅用于触发上限判断（不会真的写盘）
+    // 用 1 KB 上限的 store 验证「超限」分支，避免真的分配 100 MB
+    state.store = AttachmentStore(
+      Directory('${tempDir.path}/attachments'),
+      maxFileBytes: 1024,
+    );
     nextPickedFile = PickedFile(
       name: 'huge.bin',
-      bytes: Uint8List(26 * 1024 * 1024),
+      bytes: Uint8List(2048),
     );
 
-    await tapAsync(tester, find.byTooltip('插入附件（≤ 25 MB）'));
+    await tapAsync(tester, find.byTooltip('插入附件（≤ 100 MB）'));
     await tester.pumpAndSettle();
 
     final entry = state.selected!;
@@ -310,7 +314,7 @@ void main() {
     await createEntry(tester);
     nextPickedFile = PickedFile(name: 'shot.png', bytes: _tinyPng);
 
-    await tapAsync(tester, find.byTooltip('插入附件（≤ 25 MB）'));
+    await tapAsync(tester, find.byTooltip('插入附件（≤ 100 MB）'));
     await tester.pump(const Duration(milliseconds: 900));
     await settleAsync(tester);
 

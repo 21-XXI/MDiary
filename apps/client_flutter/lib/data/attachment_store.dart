@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
+import 'attachment_repository.dart';
+
 class AttachmentTooLargeException implements Exception {
   AttachmentTooLargeException(this.sizeBytes, this.limitBytes);
 
@@ -15,9 +17,13 @@ class AttachmentTooLargeException implements Exception {
       '附件过大：${sizeBytes ~/ (1024 * 1024)} MB，上限 ${limitBytes ~/ (1024 * 1024)} MB';
 }
 
-/// 内容寻址附件库：`<root>/<sha前两位>/<sha><ext>`。
+/// 内容寻址附件库。
 ///
-/// 同一内容只落一份（天然去重、便于 v2.0 按哈希上传）。
+/// v2 起**字节存进数据库**（`attachment_blobs`，按 sha256 去重），磁盘上的
+/// `attachments/<sha 前两位>/<sha><ext>` 退化为「缓存」：给预览和
+/// 「用系统默认程序打开」用，删掉也能从库里自动重建。
+///
+/// [blobs] 为 null 时是纯文件模式（老单元测试用），行为与 v1 一致。
 class StoredBlob {
   const StoredBlob({
     required this.sha256,
@@ -38,12 +44,22 @@ class StoredBlob {
 }
 
 class AttachmentStore {
-  AttachmentStore(this.directory);
+  AttachmentStore(this.directory, {this.blobs, int? maxFileBytes})
+    : maxFileBytes = maxFileBytes ?? defaultMaxBytes;
 
+  /// 缓存目录（`<数据目录>/attachments`）。
   final Directory directory;
 
-  /// project.md 4.1：单文件 ≤ 25 MB
-  static const int maxFileBytes = 25 * 1024 * 1024;
+  /// 数据库里的附件字节；null 表示纯文件模式（测试 / 老数据）。
+  final AttachmentRepository? blobs;
+
+  /// 单文件上限。v2 起提高到 100 MB（字节在库里，不再受文件系统零散大文件困扰）。
+  final int maxFileBytes;
+
+  static const int defaultMaxBytes = 100 * 1024 * 1024;
+
+  /// 兼容旧代码的常量名。
+  static const int maxFileBytesLegacy = defaultMaxBytes;
 
   Future<StoredBlob> storeBytes(Uint8List bytes, String filename) async {
     if (bytes.length > maxFileBytes) {
@@ -51,9 +67,10 @@ class AttachmentStore {
     }
     final digest = sha256.convert(bytes).toString();
     final ext = normalizeExtension(filename);
-    final folder = Directory(p.join(directory.path, digest.substring(0, 2)));
-    await folder.create(recursive: true);
-    final file = File(p.join(folder.path, '$digest$ext'));
+    // 数据库是源：先写库，再落一份缓存给预览/打开用。
+    blobs?.putBlob(digest, bytes);
+    final file = File(p.join(directory.path, digest.substring(0, 2), '$digest$ext'));
+    await file.parent.create(recursive: true);
     if (!await file.exists()) {
       await file.writeAsBytes(bytes, flush: true);
     }
@@ -72,11 +89,43 @@ class AttachmentStore {
   }
 
   /// 命中则返回本地绝对路径（预览与打开附件用）。
+  ///
+  /// 缓存文件不在时会从数据库里重建 —— 所以即使用户手删了 `attachments/`，
+  /// 附件依然能打开。
   String? pathFor(String sha256, String ext) {
     final file = File(
       p.join(directory.path, sha256.substring(0, 2), '$sha256$ext'),
     );
-    return file.existsSync() ? file.path : null;
+    if (file.existsSync()) return file.path;
+    final bytes = blobs?.readBlob(sha256);
+    if (bytes == null) return null;
+    try {
+      file.parent.createSync(recursive: true);
+      file.writeAsBytesSync(bytes, flush: true);
+    } on Object {
+      return null;
+    }
+    return file.path;
+  }
+
+  /// 把老版本留在磁盘上的附件搬进数据库（幂等）。返回搬入的份数。
+  Future<int> backfillFromFiles() async {
+    final repository = blobs;
+    if (repository == null) return 0;
+    final missing = repository.shasWithoutBlob();
+    var imported = 0;
+    for (final sha256 in missing) {
+      final ext = repository.extensionOf(sha256);
+      final file = File(
+        p.join(directory.path, sha256.substring(0, 2), '$sha256$ext'),
+      );
+      if (!file.existsSync()) continue;
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) continue;
+      repository.putBlob(sha256, bytes);
+      imported++;
+    }
+    return imported;
   }
 
   Future<Set<String>> hashesOnDisk() async {
@@ -92,10 +141,10 @@ class AttachmentStore {
     return result;
   }
 
-  /// 删除未被任何条目引用的附件文件；返回删除数量。
+  /// 回收孤儿附件：库里的字节 + 磁盘缓存都清掉；返回清理条数。
   Future<int> collectGarbage(Set<String> referenced) async {
-    if (!await directory.exists()) return 0;
-    var removed = 0;
+    var removed = blobs?.deleteUnreferencedBlobs() ?? 0;
+    if (!await directory.exists()) return removed;
     await for (final entity in directory.list(followLinks: false)) {
       if (entity is! Directory) continue;
       await for (final child in entity.list(followLinks: false)) {

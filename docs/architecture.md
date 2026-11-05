@@ -115,20 +115,24 @@ v2.0 同步时按 hash 上传即可幂等。代价是「文件已写、记录未
 > 新增图标时不用再逐个验证是否被保留。
 
 ### 3.3 附件
-1. `file_picker` 选择文件 → 读字节 → sha256；
-2. 写 `<数据目录>\attachments\<hash[0:2]>\<hash>.<ext>`（同 hash 已存在则跳过）；
-3. 插 `attachments` 行；
+1. `file_picker` / 拖拽 / 剪贴板拿字节 → sha256；
+2. **字节写进数据库** `attachment_blobs (sha256 PK, size, bytes)`（同 sha 只存一份），
+   磁盘 `<数据目录>\attachments\<hash[0:2]>\<hash>.<ext>` 只作为预览/打开的**缓存**；
+3. 插 `attachments` 行（日记 → sha 的索引关系）；单文件上限 100 MB；
 4. 正文插入带**原文件名**的引用：图片 `![西湖.png](assets/<hash>.png)`，普通文件
    `[会议纪要.pdf](assets/<hash>.pdf)`——纯文本 .md 里也能看出是什么附件，导出/导入仍按普通
    Markdown 解析（`markdownLinkPattern` 保持不变，alt 文本原样保留）。
 5. 预览时 `MarkdownView` 的 `imageBuilder` 把图片画出来，并在下方渲染一个彩色「附件名」标签
    （`resolveName` 用数据库里的文件名兜底老数据），点标签或图片走 `onOpenLink` → 系统默认程序打开。
    普通附件链接同样可点。
-预览时 `MarkdownView` 拦截图片链接，命中 `assets/<hash>.<ext>` 就解析到本地附件路径；点击附件打开系统默认程序（`Process.run('cmd', ['/c','start','','<path>'])`）。
+6. 打开/预览前 `AttachmentStore.pathFor()` 会确保缓存存在：缓存丢了就从库里的字节重建。
+   老版本（v1，附件只在磁盘）升级时 `backfillFromFiles()` 在启动阶段把文件搬进库（幂等）。
 
 ### 3.4 导出
 - 单篇：`<日期>-<标题>.md`，头部写 YAML front matter（title/date/tags），正文原样。
 - 整库：目录下逐个 .md + `assets/` 附件副本；相对路径 `assets/<hash>.<ext>` 保证 Typora/VS Code 可直接渲染。
+- 附件字节从 `attachment_blobs` 读出后写成普通文件（老数据缺 blob 时回落到磁盘缓存）；
+  同 sha 在一个导出目录里只写一份，但每篇 .md 都引用它。
 - 导出前统一 LF、UTF-8 无 BOM（project.md R6）。
 
 ### 3.5 导入

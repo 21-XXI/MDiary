@@ -336,7 +336,7 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     IconButton(
-                      tooltip: '插入附件（≤ 25 MB）',
+                      tooltip: '插入附件（≤ 100 MB）',
                       onPressed: _busy ? null : _insertAttachment,
                       icon: const Icon(Icons.attach_file),
                     ),

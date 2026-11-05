@@ -31,14 +31,29 @@
 | sha256 | TEXT NOT NULL | 内容哈希，决定磁盘路径 |
 | filename | TEXT NOT NULL | 原始文件名（展示、推断扩展名与 MIME） |
 | mime | TEXT NOT NULL | 由扩展名推断 |
-| size_bytes | INTEGER NOT NULL | 文件大小（≤ 25 MB） |
+| size_bytes | INTEGER NOT NULL | 文件大小（≤ 100 MB） |
 | created_at | INTEGER NOT NULL | 插入时间 |
 
 索引：`idx_attachments_entry (entry_id)`、`idx_attachments_sha (sha256)`。
 
-二进制**不入库**：落盘于
-`%APPDATA%\MDiary\attachments\<sha 前两位>\<sha><ext>`，
-同一内容多次插入只存一份（内容寻址去重）。
+## attachment_blobs（附件字节，schema v2）
+
+| 列 | 类型 | 说明 |
+|---|---|---|
+| sha256 | TEXT PK | 内容哈希；同一内容只存一份 |
+| size | INTEGER NOT NULL | 字节数 |
+| bytes | BLOB NOT NULL | 文件原始字节 |
+
+**v2 起附件二进制进库**：`attachments` 只保留「哪篇日记索引了哪个 sha」的索引关系，
+字节按 sha256 去重存在 `attachment_blobs`，被多篇日记引用也只占一份。
+
+- 磁盘上的 `<数据目录>\attachments\<sha 前两位>\<sha><ext>` 退化为**缓存**：
+  给预览与「用系统默认程序打开」用，删掉后 `pathFor()` 会从库里自动重建。
+- 老版本（v1）升级时，启动阶段 `AttachmentStore.backfillFromFiles()` 会把磁盘上的
+  旧附件读进 `attachment_blobs`（幂等，缺文件的条目跳过）。
+- 单文件上限 `AttachmentStore.defaultMaxBytes = 100 MB`。
+- 彻底删除日记时：删 `attachments` 行 → GC 删掉无引用的 `attachment_blobs` 行与缓存文件。
+- 导出仍按**原文件形式**写回 `assets/<sha><ext>`（字节来自数据库，缺 blob 的老数据回落到缓存文件）。
 
 ## tags / entry_tags（v1.0 标签）
 

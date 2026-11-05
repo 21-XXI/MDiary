@@ -32,11 +32,19 @@ Future<void> main() async {
     }
 
     final db = AppDatabase.openDefault();
-    final store = AttachmentStore(AppPaths.attachmentsDir);
-    await store.directory.create(recursive: true);
-
     final entryRepo = EntryRepository(db);
     final attachmentRepo = AttachmentRepository(db);
+    final store = AttachmentStore(
+      AppPaths.attachmentsDir,
+      blobs: attachmentRepo,
+    );
+    await store.directory.create(recursive: true);
+    // 老版本把附件放在磁盘上：第一次用 v2 打开时搬进数据库（幂等）。
+    final migratedBlobs = await store.backfillFromFiles();
+    if (migratedBlobs > 0) {
+      logger.log('Startup', '已把 $migratedBlobs 份磁盘附件迁移进数据库');
+    }
+
     final metaRepo = MetaRepository(db);
     final tagRepo = TagRepository(db);
 

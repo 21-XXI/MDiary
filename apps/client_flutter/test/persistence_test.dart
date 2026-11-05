@@ -87,8 +87,8 @@ void main() {
       final db = AppDatabase.open(dbPath);
       expect(
         db.raw.select('PRAGMA user_version').first['user_version'],
-        1,
-        reason: '第 ${i + 1} 次打开时 schema 版本应保持 1',
+        AppDatabase.schemaVersion,
+        reason: '第 ${i + 1} 次打开时 schema 版本应保持 ${AppDatabase.schemaVersion}',
       );
       final entries = EntryRepository(db);
       expect(entries.count(), i, reason: '不应因重开而丢数据或重复建表');

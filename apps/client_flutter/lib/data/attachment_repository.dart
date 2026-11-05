@@ -1,6 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:sqlite3/sqlite3.dart';
 
 import '../core/ids.dart';
+import 'attachment_store.dart' show normalizeExtension;
 import 'database.dart';
 import 'models.dart';
 
@@ -89,5 +92,72 @@ class AttachmentRepository {
   Set<String> orphanHashesFrom(Set<String> existingOnDisk) {
     final referenced = referencedHashes();
     return existingOnDisk.difference(referenced);
+  }
+
+  // ───────────────────── 附件字节（v2：存进数据库） ─────────────────────
+
+  /// 写入/覆盖一份附件字节（同 sha 只存一份）。
+  void putBlob(String sha256, Uint8List bytes) {
+    _raw.execute(
+      'INSERT INTO attachment_blobs (sha256, size, bytes) VALUES (?, ?, ?) '
+      'ON CONFLICT(sha256) DO UPDATE SET size = excluded.size, bytes = excluded.bytes',
+      <Object?>[sha256, bytes.length, bytes],
+    );
+  }
+
+  /// 读回附件字节；库里没有返回 null。
+  Uint8List? readBlob(String sha256) {
+    final rows = _raw.select(
+      'SELECT bytes FROM attachment_blobs WHERE sha256 = ?',
+      <Object?>[sha256],
+    );
+    if (rows.isEmpty) return null;
+    final value = rows.first['bytes'];
+    if (value is Uint8List) return value;
+    if (value is List<int>) return Uint8List.fromList(value);
+    return null;
+  }
+
+  bool hasBlob(String sha256) {
+    final rows = _raw.select(
+      'SELECT 1 FROM attachment_blobs WHERE sha256 = ? LIMIT 1',
+      <Object?>[sha256],
+    );
+    return rows.isNotEmpty;
+  }
+
+  /// 附件索引里有、但库里还没有字节的哈希（老版本升级时用来回填）。
+  Set<String> shasWithoutBlob() {
+    final rows = _raw.select(
+      'SELECT DISTINCT a.sha256 AS sha256 FROM attachments a '
+      'LEFT JOIN attachment_blobs b ON b.sha256 = a.sha256 '
+      'WHERE b.sha256 IS NULL',
+    );
+    return rows.map((row) => row['sha256']! as String).toSet();
+  }
+
+  /// 某份附件在索引里的扩展名（回填老文件时拼路径用）。
+  String extensionOf(String sha256) {
+    final rows = _raw.select(
+      'SELECT filename FROM attachments WHERE sha256 = ? LIMIT 1',
+      <Object?>[sha256],
+    );
+    if (rows.isEmpty) return '';
+    return normalizeExtension(rows.first['filename']! as String);
+  }
+
+  /// 删掉没有任何索引引用的附件字节；返回删除条数。
+  int deleteUnreferencedBlobs() {
+    final before = blobCount();
+    _raw.execute(
+      'DELETE FROM attachment_blobs '
+      'WHERE sha256 NOT IN (SELECT sha256 FROM attachments)',
+    );
+    return before - blobCount();
+  }
+
+  int blobCount() {
+    final rows = _raw.select('SELECT COUNT(*) AS c FROM attachment_blobs');
+    return (rows.first['c'] as int?) ?? 0;
   }
 }

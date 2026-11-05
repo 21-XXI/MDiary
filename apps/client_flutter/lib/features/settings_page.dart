@@ -141,10 +141,21 @@ class SettingsPage extends StatelessWidget {
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.image_outlined),
-                  title: const Text('附件目录'),
-                  subtitle: SelectableText(
-                    state.attachmentsPath,
-                    style: theme.textTheme.bodySmall,
+                  title: const Text('附件缓存'),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      SelectableText(
+                        state.attachmentsPath,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      Text(
+                        '附件字节存在数据库里；这里是预览/打开用的缓存，删掉会自动重建',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                   trailing: IconButton(
                     tooltip: '在资源管理器中打开',

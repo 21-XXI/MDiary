@@ -11,7 +11,7 @@ class AppDatabase {
 
   final Database raw;
 
-  static const int schemaVersion = 1;
+  static const int schemaVersion = 2;
 
   factory AppDatabase.open(String path) {
     final db = AppDatabase(sqlite3.open(path));
@@ -44,6 +44,7 @@ class AppDatabase {
     raw.execute('BEGIN');
     try {
       if (current < 1) _createV1();
+      if (current < 2) _createV2();
       raw.execute('PRAGMA user_version = $schemaVersion');
       raw.execute('COMMIT');
     } catch (error) {
@@ -132,6 +133,18 @@ class AppDatabase {
       CREATE TABLE IF NOT EXISTS app_meta (
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
+      )
+    ''');
+  }
+
+  /// v2：附件二进制进库。单独一张 `attachment_blobs`（按 sha256 主键）而不是
+  /// 在 `attachments` 上加列：同一个附件被多篇日记索引时只存一份字节。
+  void _createV2() {
+    raw.execute('''
+      CREATE TABLE IF NOT EXISTS attachment_blobs (
+        sha256 TEXT PRIMARY KEY,
+        size   INTEGER NOT NULL,
+        bytes  BLOB NOT NULL
       )
     ''');
   }

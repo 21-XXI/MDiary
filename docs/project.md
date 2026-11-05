@@ -22,9 +22,11 @@
   - 3.2 全文检索（中文可用）：标题、正文、标签。
   - 3.3 详情页可切换"预览/编辑"，只读模式亦可导出。
 - 目标4：日记可携带附件，增加附件的添加文件格式
-  - 4.1 v1.0 支持格式：图片 png/jpg/jpeg/gif/webp/svg、文档 pdf、文本/代码 txt/md/csv/json，以及其他任意文件（单文件 ≤ 25 MB）。
+  - 4.1 支持格式：图片 png/jpg/jpeg/gif/webp/svg、文档 pdf、文本/代码 txt/md/csv/json，以及其他任意文件（单文件 ≤ 100 MB）。
   - 4.2 交互：拖拽入编辑区、粘贴截图、菜单选择；插入为 `![名称](assets/<sha256>.<ext>)`，点击调用系统默认程序打开。
-  - 4.3 存储：附件二进制不入 SQLite（避免库膨胀与迁移变慢），按内容哈希存于工作区 `assets/<sha256前两位>/<sha256>.<ext>`，DB 仅存引用与元数据；删除条目时按引用计数回收孤儿附件。
+  - 4.3 存储：附件二进制**存入 SQLite**（`attachment_blobs`，按 sha256 去重，一份字节可被多篇日记索引），
+    磁盘 `attachments/<sha256前两位>/<sha256>.<ext>` 仅作预览/打开缓存、可重建；导出一律按原文件形式写回 `assets/`；
+    删除条目时按引用计数回收孤儿字节与缓存。
 
 ## 4. 迭代目标（Should Have，优先度低）
 - 迭代目标1：先在windows端完成程序以及验收（版本号v1.0，预计单人 6–8 周）
@@ -88,6 +90,7 @@
 ### 7.2 数据模型（客户端 SQLite）
 - `entry(id TEXT PK uuidv7, title TEXT, body_md TEXT, entry_date DATE, created_at, updated_at, rev INTEGER, deleted_at, device_id)`
 - `attachment(id, entry_id, sha256, filename, mime, size, created_at)`
+- `attachment_blobs(sha256 PK, size, bytes)`：附件字节（v2 起入库，按 sha 去重）
 - `tag(id, name)` / `entry_tag(entry_id, tag_id, PRIMARY KEY(entry_id, tag_id))`
 - `entry_fts`（FTS5 虚表，trigram 分词，rowid ↔ entry.id 映射）
 - `sync_state(key, value)`：last_sync_cursor、last_export_at 等
@@ -113,8 +116,8 @@
 ### 8.1 假设条件（依赖什么）
 - A1 单人开发，v1.0 仅交付 Windows；其余平台在 v2.0 排期。
 - A2 用户接受"SQLite 为真源、磁盘 .md 为导出物"，不要求直接编辑磁盘文件再回写数据库（镜像/双向模式列为 v1.1 可选）。
-- A3 用户接受附件二进制存文件系统而非 SQLite BLOB。
-- A4 规模假设：单篇正文 ≤ 100 KB，附件单文件 ≤ 25 MB，单库总量 ≤ 2 GB。
+- A3 附件二进制存 SQLite（`attachment_blobs`，v2 起）；磁盘 `attachments/` 只作预览/打开缓存，可随时重建。
+- A4 规模假设：单篇正文 ≤ 100 KB，附件单文件 ≤ 100 MB，单库总量 ≤ 2 GB。
 - A5 目标环境：Windows 10 1809+ / x64，UTF-8 无 BOM、LF 换行。
 - A6 界面以中文为主，v1.0 不做 i18n，但文案集中管理便于后续抽取。
 
@@ -154,16 +157,20 @@
 | 3.1 视图 | ✅ | 时间轴 + 左栏月历（点日期新建 / 打开当天）、置顶、软删除、回收站 |
 | 3.2 检索 | ✅ | 标题 + 正文 + 标签，中文子串匹配 |
 | 3.3 预览态 | ✅ | 预览 / 分栏下可直接导出 |
-| 4.1 附件格式 | ✅ | 任意文件 ≤ 25 MB，图片内嵌预览 |
+| 4.1 附件格式 | ✅ | 任意文件 ≤ 100 MB，图片内嵌预览 |
 | 4.2 插入方式 | ✅ | 菜单选择、Windows 拖拽、剪贴板截图（工具栏按钮 / Ctrl+Shift+V） |
-| 4.3 存储 | ✅ | sha256 内容寻址、DB 只存引用、彻底删除后自动 GC |
+| 4.3 存储 | ✅ | sha256 内容寻址、**字节入库（attachment_blobs）**、磁盘仅缓存、彻底删除后自动 GC |
 
 附加能力（超出 v1.0 计划，已并入本版）：左栏月历、星图（全部/年/月/周，共用附件连线）、
 标签（列表/搜索/导出导入）、绿色版数据目录与迁移、附件名写进 .md 且预览里彩色可点。
 
+> v1.0 交付后按新需求调整：附件由「只存文件系统」改为「字节入库 + 磁盘缓存」，单文件上限
+> 25 MB → 100 MB（schema v2，启动时自动把老文件回填进库）。这项改动在 v1.0 标签之后开发，
+> 计入 v1.1 版本线；v1.0.0 的安装包保持原样。
+
 ### 10.2 质量门槛
 
-- `flutter analyze` 0 issue；`flutter test` 162 passed；`flutter build windows --release` 成功。
+- `flutter analyze` 0 issue；`flutter test` 167 passed；`flutter build windows --release` 成功。
 - 交付物：`dist/MDiary-1.0.0-windows-x64/` 与同名 zip（含 README / 使用说明 / 交付说明 / 发布说明 / 验收清单）。
 
 ### 10.3 已知遗留（v1.1 候选，详见 `docs/backlog-v1.1.md`）

@@ -108,13 +108,19 @@ class MarkdownIo {
     var copied = 0;
     for (final attachment in list) {
       final ext = normalizeExtension(attachment.filename);
+      final target = File(p.join(assetsDir.path, '${attachment.sha256}$ext'));
+      if (await target.exists()) continue;
+      // 附件字节在库里（v2）；老数据还没有 blob 时回落到磁盘缓存。
+      final bytes = attachments.readBlob(attachment.sha256);
+      if (bytes != null) {
+        await target.writeAsBytes(bytes, flush: true);
+        copied++;
+        continue;
+      }
       final source = store.pathFor(attachment.sha256, ext);
       if (source == null) continue;
-      final target = File(p.join(assetsDir.path, '${attachment.sha256}$ext'));
-      if (!await target.exists()) {
-        await File(source).copy(target.path);
-        copied++;
-      }
+      await File(source).copy(target.path);
+      copied++;
     }
     return copied;
   }

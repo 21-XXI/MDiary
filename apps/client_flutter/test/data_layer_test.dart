@@ -47,11 +47,11 @@ void main() {
   });
 
   group('数据库与迁移', () {
-    test('初始化后 user_version = 1 且表齐全', () {
+    test('初始化后 user_version = 2 且表齐全', () {
       final version = db.raw
           .select('PRAGMA user_version')
           .first['user_version'];
-      expect(version, 1);
+      expect(version, 2);
       final tables = db.raw
           .select("SELECT name FROM sqlite_master WHERE type = 'table'")
           .map((row) => row['name'])
@@ -152,10 +152,14 @@ void main() {
       expect(files.length, 1, reason: '同内容只应存一份');
     });
 
-    test('超过 25 MB 拒绝', () async {
-      final big = Uint8List(AttachmentStore.maxFileBytes + 1);
+    test('超过单文件上限拒绝（默认 100 MB，这里用 1 KB 的 store 验证）', () async {
+      final limited = AttachmentStore(
+        Directory('${tempDir.path}/limited'),
+        maxFileBytes: 1024,
+      );
+      final big = Uint8List(2048);
       expect(
-        () => store.storeBytes(big, 'big.bin'),
+        () => limited.storeBytes(big, 'big.bin'),
         throwsA(isA<AttachmentTooLargeException>()),
       );
     });

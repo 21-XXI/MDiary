@@ -602,7 +602,10 @@ class AppState extends ChangeNotifier {
     attachmentRepo = AttachmentRepository(database);
     metaRepo = MetaRepository(database);
     tagRepo = TagRepository(database);
-    store = AttachmentStore(Directory(p.join(rootPath, 'attachments')));
+    store = AttachmentStore(
+      Directory(p.join(rootPath, 'attachments')),
+      blobs: attachmentRepo,
+    );
     markdownIo = MarkdownIo(
       entries: entryRepo,
       attachments: attachmentRepo,
