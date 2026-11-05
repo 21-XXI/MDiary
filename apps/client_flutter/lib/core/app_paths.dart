@@ -208,6 +208,8 @@ class AppPaths {
   }
 
   /// 最近用过的库目录（最多 8 个），供设置页快速切换。
+  ///
+  /// 已经被删/移走的目录会被自动过滤掉，避免点进去才报错。
   static List<String> loadRecentLibraries() {
     final file = librariesFile;
     if (!file.existsSync()) return const <String>[];
@@ -216,10 +218,22 @@ class AppPaths {
       if (decoded is! Map<String, dynamic>) return const <String>[];
       final list = decoded['recent'];
       if (list is! List) return const <String>[];
-      return list.whereType<String>().take(8).toList(growable: false);
+      return list
+          .whereType<String>()
+          .where((item) => Directory(item).existsSync())
+          .take(8)
+          .toList(growable: false);
     } on Object {
       return const <String>[];
     }
+  }
+
+  /// 从最近库列表里移除一条记录（目录被删/不再需要时用）。
+  static Future<void> removeRecentLibrary(String dirPath) async {
+    final recent = loadRecentLibraries()
+        .where((item) => !p.equals(item, dirPath))
+        .toList(growable: false);
+    await _writeLibraries(libraryDir, recent);
   }
 
   /// 切换库目录并记住（目录不存在时创建）。
@@ -233,13 +247,23 @@ class AppPaths {
         (item) => !p.equals(item, normalized),
       ),
     ].take(8).toList(growable: false);
+    await _writeLibraries(normalized, recent);
+  }
+
+  static Future<void> _writeLibraries(
+    String current,
+    List<String> recent,
+  ) async {
     final file = librariesFile;
     file.parent.createSync(recursive: true);
     await file.writeAsString(
-      jsonEncode(<String, Object>{'current': normalized, 'recent': recent}),
+      jsonEncode(<String, Object>{'current': current, 'recent': recent}),
       flush: true,
     );
   }
+
+  /// 当前库的备份目录（`<库目录>/backups`）。
+  static String backupsDirIn(String dirPath) => p.join(dirPath, 'backups');
 
   /// 库目录里的数据库文件路径。
   static String libraryDatabaseFileIn(String dirPath) =>

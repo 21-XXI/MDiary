@@ -81,7 +81,7 @@ void main() {
     for (final file in markdownFiles) {
       expect(
         file.readAsStringSync(),
-        contains('assets/${blob.sha256}${blob.ext}'),
+        contains('assets/${'shot'}-${blob.sha256.substring(0, 8)}${blob.ext}'),
         reason: '${p.basename(file.path)} 应引用到这个附件',
       );
     }

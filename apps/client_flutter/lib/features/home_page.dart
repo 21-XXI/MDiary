@@ -223,6 +223,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             controller: _searchController,
             focusNode: _searchFocus,
             onChanged: state.setQuery,
+            onSubmitted: state.rememberQuery,
             textInputAction: TextInputAction.search,
             decoration: InputDecoration(
               isDense: true,
@@ -255,6 +256,72 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
             ),
           ),
+          if (state.allTags.isNotEmpty || state.recentQueries.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: _buildFilterBar(context, state),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 搜索框下面的筛选条：标签筛选 + 最近搜索。
+  Widget _buildFilterBar(BuildContext context, AppState state) {
+    final theme = Theme.of(context);
+    final tags = state.allTags;
+    return SizedBox(
+      height: 28,
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: <Widget>[
+                _FilterChip(
+                  label: '全部',
+                  selected: state.tagFilter == null,
+                  onTap: () => state.setTagFilter(null),
+                ),
+                for (final tag in tags)
+                  _FilterChip(
+                    label: tag,
+                    selected: state.tagFilter == tag,
+                    onTap: () => state.setTagFilter(
+                      state.tagFilter == tag ? null : tag,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (state.recentQueries.isNotEmpty)
+            PopupMenuButton<String>(
+              tooltip: '最近搜索',
+              iconSize: 18,
+              padding: EdgeInsets.zero,
+              onSelected: (value) {
+                if (value == '__clear__') {
+                  state.clearQueryHistory();
+                  return;
+                }
+                _searchController.text = value;
+                state.setQuery(value);
+              },
+              itemBuilder: (menuContext) => <PopupMenuEntry<String>>[
+                for (final query in state.recentQueries)
+                  PopupMenuItem<String>(value: query, child: Text(query)),
+                const PopupMenuDivider(),
+                const PopupMenuItem<String>(
+                  value: '__clear__',
+                  child: Text('清空搜索历史'),
+                ),
+              ],
+              icon: Icon(
+                Icons.history,
+                size: 18,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
         ],
       ),
     );
@@ -301,6 +368,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           selected: state.selected?.id == entry.id,
           attachmentCount: state.attachmentCountOf(entry.id),
           tags: state.tagsOf(entry.id),
+          query: state.query,
           onTap: () => state.select(entry),
           onMenu: (position) => _showEntryMenu(context, state, entry, position),
         );
@@ -506,12 +574,56 @@ class _StatusBar extends StatelessWidget {
           ),
           const SizedBox(width: 14),
           Text(
-            'v1.1.0',
+            'v1.1.1',
             style: theme.textTheme.labelSmall?.copyWith(
               color: scheme.onSurfaceVariant,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 搜索框下面的一枚小筛选标签。
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: selected
+                ? theme.colorScheme.primaryContainer
+                : theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.6,
+                  ),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: selected
+                  ? theme.colorScheme.onPrimaryContainer
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
       ),
     );
   }

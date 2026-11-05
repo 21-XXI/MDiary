@@ -236,7 +236,8 @@ void main() {
       expect(doc.title, '雨天/测试');
       expect(doc.date, DateTime(2026, 11, 2));
       expect(
-        File('${outDir.path}/assets/${blob.sha256}.png').existsSync(),
+        File('${outDir.path}/assets/x-${blob.sha256.substring(0, 8)}.png')
+            .existsSync(),
         isTrue,
       );
     });

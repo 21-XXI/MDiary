@@ -133,6 +133,25 @@ class SettingsPage extends StatelessWidget {
                 ),
                 const Divider(height: 1),
                 ListTile(
+                  leading: const Icon(Icons.backup_outlined),
+                  title: const Text('备份数据库'),
+                  subtitle: Text(_lastBackupLabel(state)),
+                  onTap: () => _backupDatabase(context, state),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.compress),
+                  title: const Text('压缩数据库'),
+                  subtitle: const Text('删除大量日记/附件后回收文件空间（VACUUM）'),
+                  onTap: () => _compactDatabase(context, state),
+                ),                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.sell_outlined),
+                  title: const Text('标签管理'),
+                  subtitle: const Text('重命名 / 删除标签，并查看每个标签的篇数'),
+                  onTap: () => _manageTags(context, state),
+                ),                const Divider(height: 1),
+                ListTile(
                   leading: const Icon(Icons.merge_type),
                   title: const Text('合并库'),
                   subtitle: const Text(
@@ -159,9 +178,21 @@ class SettingsPage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.folder_outlined),
                   title: const Text('程序数据目录'),
-                  subtitle: SelectableText(
-                    state.dataRootPath,
-                    style: theme.textTheme.bodySmall,
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      SelectableText(
+                        state.dataRootPath,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      if (state.dataRootSourceLabel.isNotEmpty)
+                        Text(
+                          state.dataRootSourceLabel,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                    ],
                   ),
                   trailing: IconButton(
                     tooltip: '在资源管理器中打开',
@@ -180,18 +211,40 @@ class SettingsPage extends StatelessWidget {
                         state.attachmentsPath,
                         style: theme.textTheme.bodySmall,
                       ),
-                      Text(
-                        '附件字节存在数据库里；这里是预览/打开用的缓存，删掉会自动重建',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
+                      FutureBuilder<int>(
+                        future: state.attachmentCacheBytes(),
+                        builder: (context, snapshot) {
+                          final size = snapshot.data;
+                          return Text(
+                            '${size == null ? '' : '占用 ${formatBytes(size)}；'}'
+                            '字节在数据库里，缓存删掉会自动重建',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
-                  trailing: IconButton(
-                    tooltip: '在资源管理器中打开',
-                    icon: const Icon(Icons.open_in_new),
-                    onPressed: () => state.openInSystem(state.attachmentsPath),
+                  trailing: PopupMenuButton<String>(
+                    tooltip: '缓存操作',
+                    onSelected: (value) {
+                      if (value == 'open') {
+                        state.openInSystem(state.attachmentsPath);
+                      } else if (value == 'clear') {
+                        _clearAttachmentCache(context, state);
+                      }
+                    },
+                    itemBuilder: (menuContext) => const <PopupMenuEntry<String>>[
+                      PopupMenuItem<String>(
+                        value: 'open',
+                        child: Text('在资源管理器中打开'),
+                      ),
+                      PopupMenuItem<String>(
+                        value: 'clear',
+                        child: Text('清空缓存'),
+                      ),
+                    ],
                   ),
                 ),
                 const Divider(height: 1),
@@ -281,7 +334,7 @@ class SettingsPage extends StatelessWidget {
           Card(
             child: ListTile(
               leading: const Icon(Icons.info_outline),
-              title: const Text('MDiary v1.1.0'),
+              title: const Text('MDiary v1.1.1'),
               subtitle: Text(
                 'Markdown 日记 · 本地 SQLite 存储 · 附件内容寻址\n'
                 '运行于 ${Platform.operatingSystem} ${Platform.version.split(' ').first}',
@@ -537,6 +590,165 @@ class SettingsPage extends StatelessWidget {
     return result;
   }
 
+  /// 标签管理：重命名（合并到已有名字）或删除（只解除标记）。
+  static Future<void> _manageTags(BuildContext context, AppState state) async {
+    if (state.tagCounts.isEmpty) {
+      _snack(context, '还没有标签');
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('标签管理'),
+        content: SizedBox(
+          width: 420,
+          child: StatefulBuilder(
+            builder: (context, setDialogState) {
+              final counts = state.tagCounts.entries.toList();
+              return ListView(
+                shrinkWrap: true,
+                children: <Widget>[
+                  for (final item in counts)
+                    ListTile(
+                      dense: true,
+                      title: Text(item.key),
+                      subtitle: Text('${item.value} 篇'),
+                      trailing: PopupMenuButton<String>(
+                        tooltip: '操作',
+                        onSelected: (action) async {
+                          if (action == 'rename') {
+                            final renamed = await showDialog<String>(
+                              context: context,
+                              builder: (nameContext) => _NameDialog(
+                                title: const Text('重命名标签'),
+                                initial: item.key,
+                                hintText: '新名字（与已有标签同名会合并）',
+                                confirmLabel: '重命名',
+                              ),
+                            );
+                            if (renamed == null || renamed.trim().isEmpty) {
+                              return;
+                            }
+                            await state.renameTag(item.key, renamed);
+                          } else if (action == 'delete') {
+                            await state.removeTag(item.key);
+                          }
+                          setDialogState(() {});
+                        },
+                        itemBuilder: (menuContext) =>
+                            const <PopupMenuEntry<String>>[
+                          PopupMenuItem<String>(
+                            value: 'rename',
+                            child: Text('重命名'),
+                          ),
+                          PopupMenuItem<String>(
+                            value: 'delete',
+                            child: Text('删除'),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
+  static String _lastBackupLabel(AppState state) {
+    final backups = state.listBackups();
+    if (backups.isEmpty) return '还没有备份；点一下生成快照（自动保留最近 7 份）';
+    final last = backups.first;
+    return '最近备份：${formatDateTime(last.lastModifiedSync())}'
+        '（${formatBytes(last.lengthSync())}）';
+  }
+
+  static Future<void> _backupDatabase(
+    BuildContext context,
+    AppState state,
+  ) async {
+    try {
+      final path = await state.backupDatabase();
+      if (!context.mounted) return;
+      _snack(
+        context,
+        '已备份：${p.basename(path)}（${formatBytes(File(path).lengthSync())}）',
+      );
+    } catch (error) {
+      if (context.mounted) _snack(context, '备份失败：$error');
+    }
+  }
+
+  static Future<void> _compactDatabase(
+    BuildContext context,
+    AppState state,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('压缩数据库？'),
+        content: const Text('会整理数据库文件、释放已删除内容占用的空间，内容不变。'
+            '数据量大时界面会短暂无响应。'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('压缩'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      final (before, after) = await state.compactDatabase();
+      if (!context.mounted) return;
+      _snack(context, '已压缩：${formatBytes(before)} → ${formatBytes(after)}');
+    } catch (error) {
+      if (context.mounted) _snack(context, '压缩失败：$error');
+    }
+  }
+
+  static Future<void> _clearAttachmentCache(
+    BuildContext context,
+    AppState state,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('清空附件缓存？'),
+        content: const Text('附件字节都在数据库里，缓存只是预览/打开用的副本；'
+            '清空后第一次预览会重新生成。'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('清空'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      final freed = await state.clearAttachmentCache();
+      if (!context.mounted) return;
+      _snack(context, '已清空附件缓存，释放 ${formatBytes(freed)}');
+    } catch (error) {
+      if (context.mounted) _snack(context, '清空失败：$error');
+    }
+  }
   static void _snack(BuildContext context, String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()

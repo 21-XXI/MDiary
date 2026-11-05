@@ -18,10 +18,10 @@
 |---|---|---|
 | B1 ✅ 已做（v1.1：拖拽 + 粘贴截图） | 附件只能点按钮选 / 拖拽 | 拖拽已用 runner 原生 `WM_DROPFILES` 实现（不引插件）；**剪贴板粘贴截图仍未做**，需读 CF_DIB/CF_BITMAP 编码 PNG（GDI+ 或 WIC） |
 | B2 ✅ 已做（v1.1：清空回收站） | 回收站只能逐条删除 | 增加「清空回收站」批量操作（沿用 `purgeEntry` 的 GC 逻辑） |
-| B3 | 窗口尺寸/位置不记忆 | 退出时把 `window_manager` 的 bounds 存入 `app_meta`，启动恢复 |
+| B3 ✅ 已做（v1.1.1：runner 记住窗口位置/大小） | 窗口尺寸/位置不记忆 | 退出时把 `window_manager` 的 bounds 存入 `app_meta`，启动恢复 |
 | B4 ✅ 已做（v1.1：720×520 最小尺寸） | 无最小窗口尺寸 | 窗口可缩到极小，标题栏几乎无法点击；可在 runner 的 `WM_GETMINMAXINFO` 限制 720×520 |
-| B5 | 导出附件名是哈希 | `assets/<hash>.<ext>` 可读性差；可改为 `<slug>-<hash8>.<ext>`，同时保留原文件名在 front matter |
-| B6 | 回收站无「最近删除时间」排序切换 | 目前固定按 `deleted_at DESC`，够用 |
+| B5 ✅ 已做（v1.1.1：`原名-sha8.ext`） | 导出附件名是哈希 | `assets/<hash>.<ext>` 可读性差；可改为 `<slug>-<hash8>.<ext>`，同时保留原文件名在 front matter |
+| B6 ✅ 已做（v1.1.1：排序 + 全部恢复） | 回收站无「最近删除时间」排序切换 | 目前固定按 `deleted_at DESC`，够用 |
 
 ## C. 检索与性能（有实测数据支撑，暂不必做）
 

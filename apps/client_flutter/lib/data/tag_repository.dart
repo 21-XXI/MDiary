@@ -97,4 +97,85 @@ class TagRepository {
     final merged = <String>[...tagsOf(entryId), ...names];
     setTags(entryId, merged);
   }
+
+  /// 重命名一个标签；目标名字已存在时直接合并过去。
+  ///
+  /// 返回是否真的做了改动。
+  bool rename(String from, String to) {
+    final source = from.trim();
+    final target = to.trim();
+    if (source.isEmpty || target.isEmpty || source == target) return false;
+    final rows = _raw.select(
+      'SELECT id FROM tags WHERE name = ? COLLATE NOCASE',
+      <Object?>[source],
+    );
+    if (rows.isEmpty) return false;
+    final sourceId = rows.first['id']! as String;
+
+    _raw.execute('BEGIN');
+    try {
+      final existing = _raw.select(
+        'SELECT id FROM tags WHERE name = ? COLLATE NOCASE',
+        <Object?>[target],
+      );
+      if (existing.isEmpty) {
+        _raw.execute('UPDATE tags SET name = ? WHERE id = ?', <Object?>[
+          target,
+          sourceId,
+        ]);
+      } else {
+        final targetId = existing.first['id']! as String;
+        if (targetId != sourceId) {
+          _raw.execute(
+            'INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) '
+            'SELECT entry_id, ? FROM entry_tags WHERE tag_id = ?',
+            <Object?>[targetId, sourceId],
+          );
+          _raw.execute('DELETE FROM entry_tags WHERE tag_id = ?', <Object?>[
+            sourceId,
+          ]);
+          _raw.execute('DELETE FROM tags WHERE id = ?', <Object?>[sourceId]);
+        }
+      }
+      _raw.execute('COMMIT');
+      return true;
+    } catch (error) {
+      _raw.execute('ROLLBACK');
+      rethrow;
+    }
+  }
+
+  /// 删除一个标签（只解除标记，不删日记）。
+  bool remove(String name) {
+    final rows = _raw.select(
+      'SELECT id FROM tags WHERE name = ? COLLATE NOCASE',
+      <Object?>[name.trim()],
+    );
+    if (rows.isEmpty) return false;
+    final id = rows.first['id']! as String;
+    _raw.execute('BEGIN');
+    try {
+      _raw.execute('DELETE FROM entry_tags WHERE tag_id = ?', <Object?>[id]);
+      _raw.execute('DELETE FROM tags WHERE id = ?', <Object?>[id]);
+      _raw.execute('COMMIT');
+      return true;
+    } catch (error) {
+      _raw.execute('ROLLBACK');
+      rethrow;
+    }
+  }
+
+  /// 每个标签被多少篇日记使用（标签管理页展示）。
+  Map<String, int> counts() {
+    final rows = _raw.select(
+      'SELECT t.name AS name, COUNT(et.entry_id) AS c FROM tags t '
+      'LEFT JOIN entry_tags et ON et.tag_id = t.id GROUP BY t.id '
+      'ORDER BY c DESC, t.name',
+    );
+    final result = <String, int>{};
+    for (final row in rows) {
+      result[row['name']! as String] = (row['c'] as int?) ?? 0;
+    }
+    return result;
+  }
 }

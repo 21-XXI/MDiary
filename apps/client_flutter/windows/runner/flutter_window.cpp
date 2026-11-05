@@ -4,6 +4,7 @@
 #include <shellapi.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <optional>
 #include <string>
 #include <vector>
@@ -111,6 +112,89 @@ bool OpenWithShell(const std::string& utf8_path) {
   return reinterpret_cast<INT_PTR>(result) > 32;
 }
 
+// Window geometry memory: written next to the exe on close, restored on start.
+// Format: "x,y,width,height,maximized" (maximized is 0 or 1).
+std::wstring WindowBoundsPath() {
+  wchar_t module_path[MAX_PATH] = {};
+  const DWORD length = ::GetModuleFileNameW(nullptr, module_path, MAX_PATH);
+  if (length == 0 || length >= MAX_PATH) {
+    return std::wstring();
+  }
+  std::wstring path(module_path, length);
+  const size_t slash = path.find_last_of(L"\\/");
+  if (slash == std::wstring::npos) {
+    return std::wstring();
+  }
+  return path.substr(0, slash + 1) + L"mdiary-window.txt";
+}
+
+bool LoadWindowBounds(RECT* bounds, bool* maximized) {
+  const std::wstring path = WindowBoundsPath();
+  if (path.empty()) {
+    return false;
+  }
+  HANDLE file = ::CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ,
+                              nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
+                              nullptr);
+  if (file == INVALID_HANDLE_VALUE) {
+    return false;
+  }
+  char buffer[128] = {};
+  DWORD read = 0;
+  const BOOL ok = ::ReadFile(file, buffer, sizeof(buffer) - 1, &read, nullptr);
+  ::CloseHandle(file);
+  if (!ok || read == 0) {
+    return false;
+  }
+  int x = 0;
+  int y = 0;
+  int width = 0;
+  int height = 0;
+  int zoomed = 0;
+  if (::sscanf_s(buffer, "%d,%d,%d,%d,%d", &x, &y, &width, &height, &zoomed) !=
+      5) {
+    return false;
+  }
+  if (width < 720 || height < 520) {
+    return false;
+  }
+  bounds->left = x;
+  bounds->top = y;
+  bounds->right = x + width;
+  bounds->bottom = y + height;
+  *maximized = zoomed != 0;
+  return true;
+}
+
+void SaveWindowBounds(HWND hwnd) {
+  const std::wstring path = WindowBoundsPath();
+  if (path.empty()) {
+    return;
+  }
+  WINDOWPLACEMENT placement = {};
+  placement.length = sizeof(placement);
+  if (!::GetWindowPlacement(hwnd, &placement)) {
+    return;
+  }
+  const RECT rect = placement.rcNormalPosition;
+  const int maximized = placement.showCmd == SW_SHOWMAXIMIZED ? 1 : 0;
+  char buffer[128] = {};
+  const int written = ::sprintf_s(buffer, sizeof(buffer), "%ld,%ld,%ld,%ld,%d",
+                                  rect.left, rect.top, rect.right - rect.left,
+                                  rect.bottom - rect.top, maximized);
+  if (written <= 0) {
+    return;
+  }
+  HANDLE file = ::CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr,
+                              CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (file == INVALID_HANDLE_VALUE) {
+    return;
+  }
+  DWORD bytes_written = 0;
+  ::WriteFile(file, buffer, static_cast<DWORD>(written), &bytes_written, nullptr);
+  ::CloseHandle(file);
+}
+
 }  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -187,6 +271,20 @@ bool FlutterWindow::OnCreate() {
 
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
+  // Restore the window geometry from the previous session (if any).
+  {
+    RECT saved = {};
+    bool maximized = false;
+    if (LoadWindowBounds(&saved, &maximized)) {
+      ::SetWindowPos(GetHandle(), nullptr, saved.left, saved.top,
+                     saved.right - saved.left, saved.bottom - saved.top,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+      if (maximized) {
+        ::ShowWindow(GetHandle(), SW_MAXIMIZE);
+      }
+    }
+  }
+
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();
   });
@@ -200,6 +298,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  SaveWindowBounds(GetHandle());
   DragAcceptFiles(GetHandle(), FALSE);
   drop_channel_.reset();
   clipboard_channel_.reset();

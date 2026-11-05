@@ -147,12 +147,11 @@ void main() {
     final fresh = entries.findById(entry.id)!;
     final exported = await io.exportEntry(fresh, out.path);
 
-    final asset = File(
-      p.join(out.path, 'assets', '${stored.sha256}.png'),
-    );
+    final assetName = 'shot-${stored.sha256.substring(0, 8)}.png';
+    final asset = File(p.join(out.path, 'assets', assetName));
     expect(asset.existsSync(), isTrue);
     expect(asset.readAsBytesSync(), bytes);
-    expect(File(exported).readAsStringSync(), contains('assets/'));
+    expect(File(exported).readAsStringSync(), contains('assets/$assetName'));
   }, skip: skip);
 }
 

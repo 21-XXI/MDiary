@@ -14,6 +14,7 @@ class EntryListTile extends StatelessWidget {
     this.attachmentCount = 0,
     this.tags = const <String>[],
     this.onMenu,
+    this.query = '',
   });
 
   final Entry entry;
@@ -26,6 +27,9 @@ class EntryListTile extends StatelessWidget {
 
   /// 右键/长按菜单（置顶、删除等由列表页提供）。
   final void Function(Offset globalPosition)? onMenu;
+
+  /// 当前搜索词：命中的部分在标题/摘要里高亮。
+  final String query;
 
   @override
   Widget build(BuildContext context) {
@@ -58,10 +62,10 @@ class EntryListTile extends StatelessWidget {
                       ),
                     ),
                   Expanded(
-                    child: Text(
+                    child: _highlighted(
+                      context,
                       title,
                       maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: selected
                             ? FontWeight.w700
@@ -100,10 +104,10 @@ class EntryListTile extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 3),
-              Text(
+              _highlighted(
+                context,
                 preview.isEmpty ? '（空白）' : preview,
                 maxLines: 2,
-                overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                   height: 1.4,
@@ -154,6 +158,56 @@ class EntryListTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  /// 把命中的关键词高亮出来；没有搜索词时就是普通 Text。
+  Widget _highlighted(
+    BuildContext context,
+    String text, {
+    required int maxLines,
+    TextStyle? style,
+  }) {
+    final needle = query.trim();
+    if (needle.isEmpty) {
+      return Text(
+        text,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+        style: style,
+      );
+    }
+    final scheme = Theme.of(context).colorScheme;
+    final highlight = TextStyle(
+      backgroundColor: scheme.tertiaryContainer,
+      color: scheme.onTertiaryContainer,
+      fontWeight: FontWeight.w700,
+    );
+    final lower = text.toLowerCase();
+    final target = needle.toLowerCase();
+    final spans = <InlineSpan>[];
+    var start = 0;
+    while (true) {
+      final index = lower.indexOf(target, start);
+      if (index < 0) break;
+      if (index > start) {
+        spans.add(TextSpan(text: text.substring(start, index), style: style));
+      }
+      spans.add(
+        TextSpan(
+          text: text.substring(index, index + target.length),
+          style: (style ?? const TextStyle()).merge(highlight),
+        ),
+      );
+      start = index + target.length;
+    }
+    if (start < text.length) {
+      spans.add(TextSpan(text: text.substring(start), style: style));
+    }
+    return Text.rich(
+      TextSpan(children: spans),
+      maxLines: maxLines,
+      overflow: TextOverflow.ellipsis,
     );
   }
 

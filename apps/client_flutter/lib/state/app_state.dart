@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -159,6 +160,8 @@ class AppState extends ChangeNotifier {
   SaveStatus _status = SaveStatus.idle;
   String? _lastError;
   String _query = '';
+  String? _tagFilter;
+  List<String> _recentQueries = const <String>[];
   bool _loading = true;
   bool _dirtyDraft = false;
   int _trashCount = 0;
@@ -187,6 +190,62 @@ class AppState extends ChangeNotifier {
   SaveStatus get status => _status;
   String? get lastError => _lastError;
   String get query => _query;
+
+  /// 当前按标签筛选（null 表示全部）。
+  String? get tagFilter => _tagFilter;
+
+  /// 库里出现过的所有标签名（左栏筛选条用）。
+  List<String> get allTags => tagRepo.allNames();
+
+  /// 最近搜索过的关键词（最多 8 个）。
+  List<String> get recentQueries => _recentQueries;
+
+  void setTagFilter(String? tag) {
+    if (_tagFilter == tag) return;
+    _tagFilter = tag;
+    notifyListeners();
+    refresh();
+  }
+
+  /// 记一条搜索历史（去重、最多 8 条，存在 app_meta 里）。
+  void rememberQuery(String value) {
+    final query = value.trim();
+    if (query.isEmpty) return;
+    final next = <String>[
+      query,
+      ..._recentQueries.where((item) => item != query),
+    ].take(8).toList(growable: false);
+    if (_listEquals(next, _recentQueries)) return;
+    _recentQueries = next;
+    metaRepo.set('recent_queries', jsonEncode(next));
+    notifyListeners();
+  }
+
+  void clearQueryHistory() {
+    _recentQueries = const <String>[];
+    metaRepo.set('recent_queries', '[]');
+    notifyListeners();
+  }
+
+  static bool _listEquals(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  List<String> _readRecentQueries() {
+    final raw = metaRepo.get('recent_queries');
+    if (raw == null || raw.isEmpty) return const <String>[];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const <String>[];
+      return decoded.whereType<String>().take(8).toList(growable: false);
+    } on Object {
+      return const <String>[];
+    }
+  }
   bool get loading => _loading;
   int get trashCount => _trashCount;
   ThemeMode get themeMode => _themeMode;
@@ -218,6 +277,23 @@ class AppState extends ChangeNotifier {
   List<String> get allTagNames => tagRepo.allNames();
 
   /// 覆盖式设置标签；保存后刷新列表（标签也参与搜索）。
+  /// 每个标签的使用次数（标签管理）。
+  Map<String, int> get tagCounts => tagRepo.counts();
+
+  /// 重命名标签；合并到已有名字时两边条目会合并。
+  Future<void> renameTag(String from, String to) async {
+    tagRepo.rename(from, to);
+    if (_tagFilter == from) _tagFilter = to;
+    await refresh();
+  }
+
+  /// 删除标签（只解除标记，不删日记）。
+  Future<void> removeTag(String name) async {
+    tagRepo.remove(name);
+    if (_tagFilter == name) _tagFilter = null;
+    await refresh();
+  }
+
   Future<void> setTags(Entry entry, List<String> names) async {
     tagRepo.setTags(entry.id, names);
     await refresh();
@@ -250,6 +326,7 @@ class AppState extends ChangeNotifier {
     };
     _editorFontSize = ((metaRepo.getInt('editor_font_size') ?? 16).toDouble())
         .clamp(12, 28);
+    _recentQueries = _readRecentQueries();
     _loading = false;
     await refresh();
     // 日历默认停在「最新的一天」：今天与最新一篇里更晚的那个。
@@ -261,7 +338,7 @@ class AppState extends ChangeNotifier {
   Future<void> refresh() async {
     _entries
       ..clear()
-      ..addAll(entryRepo.query(keyword: _query));
+      ..addAll(entryRepo.query(keyword: _query, tag: _tagFilter));
     _trashCount = entryRepo.count(deleted: true);
     _attachmentCounts = attachmentRepo.countsByEntry();
     _tagsByEntry = tagRepo.allTagsByEntry();
@@ -460,7 +537,8 @@ class AppState extends ChangeNotifier {
     return store.collectGarbage(referenced);
   }
 
-  List<Entry> deletedEntries() => entryRepo.query(deleted: true);
+  List<Entry> deletedEntries({bool byDeletedAt = true}) =>
+      entryRepo.query(deleted: true, byDeletedAt: byDeletedAt);
 
   int attachmentCountOf(String entryId) => _attachmentCounts[entryId] ?? 0;
 
@@ -485,6 +563,20 @@ class AppState extends ChangeNotifier {
     String filename,
   ) async {
     final blob = await store.storeBytes(bytes, filename);
+    return _attachBlob(entry, blob, filename);
+  }
+
+  /// 从磁盘路径入库：分块算 sha256，库里已有这份字节时不再读文件内容。
+  Future<AttachedFile> attachPath(Entry entry, String path) async {
+    final blob = await store.storeFile(path);
+    return _attachBlob(entry, blob, p.basename(path));
+  }
+
+  Future<AttachedFile> _attachBlob(
+    Entry entry,
+    StoredBlob blob,
+    String filename,
+  ) async {
     final attachment = attachmentRepo.insert(
       entryId: entry.id,
       sha256: blob.sha256,
@@ -499,11 +591,6 @@ class AppState extends ChangeNotifier {
       blob: blob,
       isImage: isImageFileName(filename),
     );
-  }
-
-  Future<AttachedFile> attachPath(Entry entry, String path) async {
-    final bytes = await File(path).readAsBytes();
-    return attachBytes(entry, bytes, p.basename(path));
   }
 
   /// 把剪贴板里的图片（Windows 截图）落成附件；剪贴板没有图片时返回 null。
@@ -575,60 +662,109 @@ class AppState extends ChangeNotifier {
     null => '',
   };
 
-  /// 把数据迁到 [target] 并切换过去。
-  ///
-  /// 顺序：落盘待保存内容 -> 校验目标 -> 关库 -> 复制并校验 -> 记住新位置 -> 重开 -> 删旧目录。
-  /// 任何一步失败都会回滚到旧目录（旧数据原地不动），并把异常抛给调用方。
-  Future<MigrationResult> changeDataRoot(String target) async {
-    final oldRoot = dataRootPath;
-    final normalized = p.canonicalize(target);
-    if (p.equals(normalized, p.canonicalize(oldRoot))) {
-      throw const DataRootMigrationException('这已经是当前数据目录');
+  /// 当前库的数据库文件路径（备份/压缩用）。
+  String get databaseFilePath => AppPaths.isInitialized
+      ? AppPaths.databaseFile
+      : DataRootMigration.databaseFileIn(dataRootPath);
+
+  /// 当前库的备份目录（`<库目录>/backups`）。
+  String get backupDirectory => p.join(p.dirname(databaseFilePath), 'backups');
+
+  /// 手动备份：`VACUUM INTO` 生成一致性快照，保留最近 7 份。返回备份文件路径。
+  Future<String> backupDatabase() async {
+    final source = File(databaseFilePath);
+    if (!source.existsSync()) {
+      throw const DataRootMigrationException('当前数据库不是磁盘库，无法备份');
     }
-
     await flushNow();
-    _saveDebounce?.cancel();
-    _searchDebounce?.cancel();
+    final dir = Directory(backupDirectory)..createSync(recursive: true);
+    final target = p.join(dir.path, 'mdiary-${_fileTimestamp()}.sqlite');
+    db.backupTo(target);
+    _pruneBackups(dir);
+    return target;
+  }
 
-    final migration = DataRootMigration(source: oldRoot, target: normalized);
-    await migration.validate();
-
-    // 复制前必须关库：WAL 合并回主库，目标目录只需要一个 db/mdiary.sqlite。
-    db.checkpoint();
-    db.dispose();
-
-    AppDatabase? reopened;
+  /// 超过 24 小时没有备份就自动备份一份；不需要时返回 null。
+  Future<String?> autoBackupIfDue() async {
+    final source = File(databaseFilePath);
+    if (!source.existsSync()) return null;
+    final backups = listBackups();
+    if (backups.isNotEmpty &&
+        DateTime.now().difference(backups.first.lastModifiedSync()) <
+            const Duration(hours: 24)) {
+      return null;
+    }
     try {
-      final result = await migration.run();
-      reopened = AppDatabase.open(
-        DataRootMigration.databaseFileIn(normalized),
-      );
-      await AppPaths.switchTo(normalized);
-      _rebind(normalized, reopened);
-      reopened = null; // 所有权已交给 state
-      await bootstrap();
-      await DataRootMigration.removeOldRoot(
-        oldRoot,
-        exePath: Platform.resolvedExecutable,
-      );
-      return result;
-    } catch (error) {
-      reopened?.dispose();
-      // 回滚：数据还在旧目录，重新打开旧库；位置指针也尽量改回去。
-      try {
-        await AppPaths.switchTo(oldRoot);
-      } on Object {
-        // 指针写不回去也不能让应用停在这里，内存里先回到旧目录。
-      }
-      _rebind(
-        oldRoot,
-        AppDatabase.open(DataRootMigration.databaseFileIn(oldRoot)),
-      );
-      await bootstrap();
-      rethrow;
+      return await backupDatabase();
+    } on Object {
+      return null; // 备份失败不能挡住启动
     }
   }
 
+  /// 备份文件，最新的在前。
+  List<File> listBackups() {
+    final dir = Directory(backupDirectory);
+    if (!dir.existsSync()) return const <File>[];
+    final files =
+        dir
+            .listSync(followLinks: false)
+            .whereType<File>()
+            .where((file) => file.path.endsWith('.sqlite'))
+            .toList()
+          ..sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+    return files;
+  }
+
+  void _pruneBackups(Directory dir, {int keep = 7}) {
+    final files =
+        dir
+            .listSync(followLinks: false)
+            .whereType<File>()
+            .where((file) => file.path.endsWith('.sqlite'))
+            .toList()
+          ..sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+    for (final file in files.skip(keep)) {
+      try {
+        file.deleteSync();
+      } on Object {
+        // 删不掉就留着，不影响使用
+      }
+    }
+  }
+
+  /// 压缩数据库，返回（压缩前, 压缩后）字节数。
+  Future<(int, int)> compactDatabase() async {
+    final file = File(databaseFilePath);
+    if (!file.existsSync()) {
+      throw const DataRootMigrationException('当前数据库不是磁盘库，无法压缩');
+    }
+    await flushNow();
+    // 先合并 WAL，否则量到的主库文件大小是"假小"
+    db.checkpoint();
+    final before = file.lengthSync();
+    db.compact();
+    final after = file.lengthSync();
+    notifyListeners();
+    return (before, after);
+  }
+
+  /// 附件缓存占用的字节数。
+  Future<int> attachmentCacheBytes() => store.cacheBytes();
+
+  /// 清空附件缓存（字节在库里，下次预览/打开会自动重建），返回释放的字节数。
+  Future<int> clearAttachmentCache() async {
+    final freed = await store.clearCache();
+    notifyListeners();
+    return freed;
+  }
+
+  static String _fileTimestamp() {
+    final now = DateTime.now();
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${now.year}${two(now.month)}${two(now.day)}'
+        '-${two(now.hour)}${two(now.minute)}${two(now.second)}'
+        '-${now.millisecond.toString().padLeft(3, '0')}';
+  }
   /// 用一个数据库文件覆盖当前库（先校验、先备份，失败自动回滚）。
   ///
   /// 只替换 `db/mdiary.sqlite`；如果被导入库的旁边还有 `attachments/`（老版本把附件
@@ -994,6 +1130,17 @@ class AppState extends ChangeNotifier {
   }
 
   // ───────────────────────────── 回收站 ─────────────────────────────
+
+  /// 恢复回收站里的全部日记；返回恢复的条数。
+  Future<int> restoreAllDeleted() async {
+    final list = deletedEntries();
+    for (final entry in list) {
+      entryRepo.restore(entry.id);
+    }
+    await refresh();
+    notifyListeners();
+    return list.length;
+  }
 
   /// 清空回收站：逐条彻底删除并回收孤儿附件；返回删除的条数。
   Future<int> purgeAllDeleted() async {

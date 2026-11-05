@@ -128,10 +128,20 @@ v2.0 同步时按 hash 上传即可幂等。代价是「文件已写、记录未
 6. 打开/预览前 `AttachmentStore.pathFor()` 会确保缓存存在：缓存丢了就从库里的字节重建。
    老版本（v1，附件只在磁盘）升级时 `backfillFromFiles()` 在启动阶段把文件搬进库（幂等）。
 
+### 3.3.1 备份 / 压缩 / 缓存（v1.1.1）
+- 备份：`VACUUM INTO <库目录>\backups\mdiary-<时间>.sqlite`，每天首启自动一次，保留 7 份。
+- 压缩：`PRAGMA wal_checkpoint(TRUNCATE)` + `VACUUM`，回收已删内容占用的文件空间。
+- 缓存：`attachments/` 只是预览副本，可一键清空；`AttachmentStore.pathFor` 会从库里重建。
+- 大附件：`AttachmentStore.storeFile` 先分块算 sha256，库里已有时直接复用缓存，不读文件内容。
+
+### 3.3.2 窗口几何（v1.1.1）
+runner 在 `OnDestroy` 用 `GetWindowPlacement` 把 `x,y,w,h,maximized` 写到 exe 旁的
+`mdiary-window.txt`，启动时读取并 `SetWindowPos` 恢复；文件缺失或数值非法时用默认 1280×820。
+
 ### 3.4 导出
 - 单篇：`<日期>-<标题>.md`，头部写 YAML front matter（title/date/tags），正文原样。
 - 整库：目录下逐个 .md + `assets/` 附件副本；相对路径 `assets/<hash>.<ext>` 保证 Typora/VS Code 可直接渲染。
-- 附件字节从 `attachment_blobs` 读出后写成普通文件（老数据缺 blob 时回落到磁盘缓存）；
+- 附件文件名是 `<原名>-<sha 前 8 位><扩展名>`（好认又不重名），正文引用同步改写，导入端按路径解析后重新按内容哈希入库；
   同 sha 在一个导出目录里只写一份，但每篇 .md 都引用它。
 - 导出前统一 LF、UTF-8 无 BOM（project.md R6）。
 

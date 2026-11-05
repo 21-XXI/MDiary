@@ -70,6 +70,11 @@ Future<void> main() async {
       dataRootNotice: AppPaths.fallbackReason,
     );
     await state.bootstrap();
+    // 每天第一次启动时留一份一致性快照（失败不挡启动）。
+    final autoBackup = await state.autoBackupIfDue();
+    if (autoBackup != null) {
+      logger.log('Startup', '已自动备份数据库：$autoBackup');
+    }
     runApp(MDiaryApp(state: state));
     if (Platform.isWindows) {
       // 拖拽导入：资源管理器 -> 窗口，文件挂到当前日记上。

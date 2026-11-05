@@ -148,7 +148,7 @@
 - （v2.0）Android APK / iOS TestFlight / macOS dmg / Linux AppImage
 - （v3.0）RAG 服务与 API 文档
 
-## 10. 交付状态（v1.0 2026-11-03 / v1.1 2026-11-05）
+## 10. 交付状态（v1.0 2026-11-03 / v1.1 2026-11-05 / v1.1.1 打磨）
 
 ### 10.1 已达成（对应第 3 节 Must Have）
 
@@ -176,7 +176,7 @@
 
 ### 10.2 质量门槛
 
-- `flutter analyze` 0 issue；`flutter test` 181 passed（v1.1）；`flutter build windows --release` 成功。
+- `flutter analyze` 0 issue；`flutter test` 187 passed（v1.1.1）；`flutter build windows --release` 成功。
 - 交付物：`dist/MDiary-1.0.0-windows-x64/` 与同名 zip（含 README / 使用说明 / 交付说明 / 发布说明 / 验收清单）。
 
 ### 10.3 已知遗留（v1.1 候选，详见 `docs/backlog-v1.1.md`）

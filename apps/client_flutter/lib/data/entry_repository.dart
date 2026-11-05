@@ -13,10 +13,22 @@ class EntryRepository {
   Database get _raw => _db.raw;
 
   /// 列表查询。[deleted] 为 true 时查回收站。
-  List<Entry> query({String keyword = '', bool deleted = false}) {
+  List<Entry> query({
+    String keyword = '',
+    bool deleted = false,
+    String? tag,
+    bool byDeletedAt = true,
+  }) {
     final sql = StringBuffer('SELECT * FROM entries WHERE ');
     sql.write(deleted ? 'deleted_at IS NOT NULL' : 'deleted_at IS NULL');
     final params = <Object?>[];
+    if (tag != null && tag.isNotEmpty) {
+      sql.write(
+        ' AND id IN (SELECT et.entry_id FROM entry_tags et'
+        ' JOIN tags tg ON tg.id = et.tag_id WHERE tg.name = ?)',
+      );
+      params.add(tag);
+    }
     final kw = keyword.trim();
     if (kw.isNotEmpty) {
       final pattern = '%${_escapeLike(kw)}%';
@@ -30,11 +42,15 @@ class EntryRepository {
         ..add(pattern)
         ..add(pattern);
     }
-    sql.write(
-      deleted
-          ? ' ORDER BY deleted_at DESC'
-          : ' ORDER BY pinned DESC, entry_date DESC, updated_at DESC',
-    );
+    if (deleted) {
+      sql.write(
+        byDeletedAt
+            ? ' ORDER BY deleted_at DESC'
+            : ' ORDER BY entry_date DESC, deleted_at DESC',
+      );
+    } else {
+      sql.write(' ORDER BY pinned DESC, entry_date DESC, updated_at DESC');
+    }
     final rows = _raw.select(sql.toString(), params);
     return rows
         .map((row) => Entry.fromMap(Map<String, Object?>.from(row)))

@@ -1,7 +1,7 @@
 # v1.1 验收清单
 
 对应 `docs/project.md` 第 6 节。执行环境：Windows 10/11 x64，`flutter build windows --release --no-tree-shake-icons` 产物。
-版本：**1.1.0**（2026-11-05）。上一版记录见 git 历史中的 `acceptance-v1.0.md`（本文件由它演进而来）。
+版本：**1.1.1**（2026-11-05，v1.1 打磨）。上一版记录见 git 历史中的 `acceptance-v1.0.md`（本文件由它演进而来）。
 
 > 状态列：`PASS` / `FAIL`（附现象）/ `BLOCKED`；标「自动」的项由 `flutter test` 覆盖，标「人工」的需要真机点一遍。
 
@@ -10,10 +10,10 @@
 | # | 项 | 命令 / 操作 | 期望 | 状态 |
 |---|---|---|---|---|
 | A1 | 静态分析 | `flutter analyze` | 0 issue | **PASS**（2026-11-05 自动验证，0 issue） |
-| A2 | 单元测试 | `flutter test` | 全部通过 | **PASS**（2026-11-05 自动验证，**181 passed**：核心逻辑 / 真实 SQLite / 界面 widget / 布局 / 迁移 / 多库 / 附件入库 / 拖拽 / 星图 / 标签 / 粘贴截图 / v1.1 收尾） |
+| A2 | 单元测试 | `flutter test` | 全部通过 | **PASS**（2026-11-05 自动验证，**187 passed**：核心逻辑 / 真实 SQLite / 界面 widget / 布局 / 迁移 / 多库 / 附件入库 / 拖拽 / 星图 / 标签 / 粘贴截图 / v1.1 收尾） |
 | A3 | Release 构建 | `scripts\build.ps1` | 产出 `mdiary.exe` | **PASS**（2026-11-05，Release 目录 21.9 MB；打包产物独立启动建库通过） |
 | A4 | 提交审查 | `git log` | 每条 commit 含改动/原因/风险/验证/回滚 | **PASS**（提交均按 `.gitmessage` 模板，`scripts/check-commits.ps1` 通过） |
-| A5 | 交付包校验 | `SHA256SUMS.txt` | 与 zip 实际哈希一致 | **PASS**（`MDiary-1.1.0-windows-x64.zip`，13.7 MB，哈希见 `dist/SHA256SUMS.txt`） |
+| A5 | 交付包校验 | `SHA256SUMS.txt` | 与 zip 实际哈希一致 | **PASS**（`MDiary-1.1.1-windows-x64.zip`，13.7 MB，哈希见 `dist/SHA256SUMS.txt`） |
 
 ## B. 目标 1：书写并保存为 .md
 
@@ -110,8 +110,27 @@
 | H5 | 附件名可点 | 预览含图片的日记 | 图片下方彩色名字标签，点击打开附件 | **自动**：`markdown_view_test` |
 | H6 | 暗色主题 | 设置切深色 | 全部页面配色正常 | 人工 |
 
-## I. 汇总（2026-11-05）
+## I. v1.1.1 打磨项
 
-- 自动验证：`flutter analyze` 0 issue、`flutter test` **181 passed**、`flutter build windows --release` 成功、`scripts/verify.ps1` 全流程通过。
+| # | 项 | 操作 | 期望 | 状态 |
+|---|---|---|---|---|
+| I1 | 手动备份 | 设置 →「备份数据库」 | 生成 `db/backups/mdiary-<时间>.sqlite`，只留 7 份 | **自动**：`polish_test` |
+| I2 | 自动备份 | 24 小时内首启 | 自动备份一次，之后不再重复 | **自动**：`polish_test` |
+| I3 | 压缩数据库 | 设置 →「压缩数据库」 | 大小不增、内容不变 | **自动**：`polish_test` |
+| I4 | 附件缓存 | 设置 →「附件缓存」→ 清空 | 释放空间，预览时自动从库里重建 | **自动**：`polish_test` |
+| I5 | 窗口记忆 | 调整窗口后正常关闭再开 | 位置/大小恢复 | **PASS（实测）**：预置 `mdiary-window.txt` 后启动，窗口落在 200,150 / 900×600 |
+| I6 | 回收站排序/全部恢复 | 回收站 → 排序 / 全部恢复 | 顺序切换、批量恢复到原日期 | **自动**：`polish_test`（恢复）；排序人工 |
+| I7 | 标签筛选 | 首页标签筛选条 | 只显示该标签的日记，搜索可叠加 | **自动**：`polish_test` |
+| I8 | 标签管理 | 设置 →「标签管理」重命名/删除 | 同名合并、删除不删日记 | **自动**：`polish_test` |
+| I9 | 搜索历史 | 搜索后点历史图标 | 最近 8 条，可清空，重启仍在 | **自动**：`polish_test` |
+| I10 | 关键词高亮 | 搜索后看列表 | 命中的标题/摘要高亮 | 人工 |
+| I11 | 导出可读附件名 | 整库导出 | `assets/西湖-<sha8>.png`，正文引用一致，再导入正常 | **自动**：`polish_test`、`attachment_blob_test` |
+| I12 | 星图适应窗口/标签筛选 | 星图工具栏 | 一键缩放到位、按标签过滤 | 人工 |
+| I13 | 失效库记录 | 删掉某个库目录后打开「切换库」 | 记录自动隐藏，不再点进去才报错 | **自动**：`polish_test` |
+| I14 | 冒烟脚本 | `scripts\\smoke.ps1` | 启动建库 + 单实例互斥通过 | **PASS**（`verify.ps1` 自动跑） |
+
+## J. 汇总（2026-11-05）
+
+- 自动验证：`flutter analyze` 0 issue、`flutter test` **187 passed**、`flutter build windows --release` 成功、`scripts/verify.ps1` 全流程通过。
 - 交付物：`dist/MDiary-1.1.0-windows-x64/`、`dist/MDiary-1.1.0-windows-x64.zip`（13.7 MB）、`dist/SHA256SUMS.txt`。
 - 待人工确认项（建议验收时逐条点）：B3/B4/B5/B8、D1/D4、E2/E3、F1/F2/F4/F6/F10/F11、H6。

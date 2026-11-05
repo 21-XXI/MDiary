@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../core/formatters.dart';
@@ -23,12 +25,40 @@ class StarMapPage extends StatefulWidget {
 
 class _StarMapPageState extends State<StarMapPage> {
   StarPeriod _period = StarPeriod.month;
+  final TransformationController _controller = TransformationController();
+  String? _tag;
+  Size _viewport = Size.zero;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _fitToView(StarMap map, Size viewport) {
+    if (viewport.isEmpty || map.width <= 0 || map.height <= 0) return;
+    final scale = math
+        .min(viewport.width / map.width, viewport.height / map.height)
+        .clamp(0.3, 2.5);
+    final dx = (viewport.width - map.width * scale) / 2;
+    final dy = (viewport.height - map.height * scale) / 2;
+    _controller.value = Matrix4.identity()
+      ..setEntry(0, 0, scale)
+      ..setEntry(1, 1, scale)
+      ..setEntry(0, 3, dx)
+      ..setEntry(1, 3, dy);
+  }
 
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final theme = Theme.of(context);
-    final entries = state.allEntries;
+    final all = state.allEntries;
+    final entries = _tag == null
+        ? all
+        : all
+              .where((entry) => state.tagsOf(entry.id).contains(_tag))
+              .toList(growable: false);
     final attachments = state.allAttachments;
     final map = buildStarMap(
       entries: entries,
@@ -41,6 +71,27 @@ class _StarMapPageState extends State<StarMapPage> {
         title: const Text('星图'),
         centerTitle: false,
         actions: <Widget>[
+          if (state.allTags.isNotEmpty)
+            PopupMenuButton<String?>(
+              tooltip: '按标签筛选',
+              icon: const Icon(Icons.filter_alt_outlined, size: 20),
+              onSelected: (value) {
+                setState(() => _tag = value);
+              },
+              itemBuilder: (menuContext) => <PopupMenuEntry<String?>>[
+                const PopupMenuItem<String?>(
+                  value: null,
+                  child: Text('全部'),
+                ),
+                for (final tag in state.allTags)
+                  PopupMenuItem<String?>(value: tag, child: Text(tag)),
+              ],
+            ),
+          IconButton(
+            tooltip: '适应窗口',
+            icon: const Icon(Icons.fit_screen_outlined, size: 20),
+            onPressed: () => _fitToView(map, _viewport),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: Center(
@@ -90,36 +141,44 @@ class _StarMapPageState extends State<StarMapPage> {
           : Stack(
               children: <Widget>[
                 Positioned.fill(
-                  child: InteractiveViewer(
-                    constrained: false,
-                    minScale: 0.3,
-                    maxScale: 2.5,
-                    boundaryMargin: const EdgeInsets.all(240),
-                    child: SizedBox(
-                      width: map.width,
-                      height: map.height,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTapUp: (details) =>
-                            _handleTap(state, map, details.localPosition),
-                        child: CustomPaint(
-                          painter: _StarMapPainter(
-                            map: map,
-                            entryColor: theme.colorScheme.primary,
-                            attachmentColor: theme.colorScheme.tertiary,
-                            sharedColor: theme.colorScheme.secondary,
-                            lineColor: theme.colorScheme.outlineVariant,
-                            labelColor: theme.colorScheme.onSurface,
-                            bucketColor: theme.colorScheme.onSurfaceVariant,
-                            surface: theme.colorScheme.surface,
-                            titleOf: _titleOf,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // 只记录视口大小，供「适应窗口」按钮计算缩放；不自动缩放，
+                      // 免得第一次打开就跳视图（也让点击坐标保持稳定）。
+                      _viewport = constraints.biggest;
+                      return InteractiveViewer(
+                        transformationController: _controller,
+                        constrained: false,
+                        minScale: 0.3,
+                        maxScale: 2.5,
+                        boundaryMargin: const EdgeInsets.all(240),
+                        child: SizedBox(
+                          width: map.width,
+                          height: map.height,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTapUp: (details) =>
+                                _handleTap(state, map, details.localPosition),
+                            child: CustomPaint(
+                              painter: _StarMapPainter(
+                                map: map,
+                                entryColor: theme.colorScheme.primary,
+                                attachmentColor: theme.colorScheme.tertiary,
+                                sharedColor: theme.colorScheme.secondary,
+                                lineColor: theme.colorScheme.outlineVariant,
+                                labelColor: theme.colorScheme.onSurface,
+                                bucketColor:
+                                    theme.colorScheme.onSurfaceVariant,
+                                surface: theme.colorScheme.surface,
+                                titleOf: _titleOf,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   ),
-                ),
-                Positioned(
+                ),                Positioned(
                   left: 16,
                   bottom: 12,
                   child: Text(

@@ -83,9 +83,75 @@ class AttachmentStore {
     );
   }
 
+  /// 从磁盘读一个附件入库。
+  ///
+  /// 分块算 sha256（不把整个文件读两次）；如果库里已经有这份字节，直接写缓存
+  /// 返回，**完全不读文件内容**——重复导入大文件不会有内存峰值。
   Future<StoredBlob> storeFile(String sourcePath) async {
-    final bytes = await File(sourcePath).readAsBytes();
-    return storeBytes(bytes, p.basename(sourcePath));
+    final file = File(sourcePath);
+    final length = await file.length();
+    if (length > maxFileBytes) {
+      throw AttachmentTooLargeException(length, maxFileBytes);
+    }
+    final digest = await _sha256OfFile(file);
+    final ext = normalizeExtension(file.path);
+    final cache = File(
+      p.join(directory.path, digest.substring(0, 2), '$digest$ext'),
+    );
+
+    if (blobs?.hasBlob(digest) ?? false) {
+      await cache.parent.create(recursive: true);
+      if (!await cache.exists()) await file.copy(cache.path);
+      return StoredBlob(
+        sha256: digest,
+        ext: ext,
+        sizeBytes: length,
+        path: cache.path,
+        filename: p.basename(file.path),
+      );
+    }
+
+    final bytes = await file.readAsBytes();
+    return storeBytes(bytes, p.basename(file.path));
+  }
+
+  static Future<String> _sha256OfFile(File file) async {
+    final sink = _DigestSink();
+    final input = sha256.startChunkedConversion(sink);
+    await for (final chunk in file.openRead()) {
+      input.add(chunk);
+    }
+    input.close();
+    return sink.value.toString();
+  }
+
+  /// 缓存目录当前占用的字节数（不含子目录本身）。
+  Future<int> cacheBytes() async {
+    if (!await directory.exists()) return 0;
+    var total = 0;
+    await for (final entity in directory.list(recursive: true, followLinks: false)) {
+      if (entity is! File) continue;
+      try {
+        total += await entity.length();
+      } on Object {
+        // 文件刚被删掉：忽略
+      }
+    }
+    return total;
+  }
+
+  /// 清空缓存目录（字节都在数据库里，下次预览/打开会自动重建）。返回释放的字节数。
+  Future<int> clearCache() async {
+    final freed = await cacheBytes();
+    if (!await directory.exists()) return 0;
+    await for (final entity in directory.list(followLinks: false)) {
+      try {
+        await entity.delete(recursive: true);
+      } on Object {
+        // 被占用就跳过，不影响其它文件
+      }
+    }
+    return freed;
   }
 
   /// 命中则返回本地绝对路径（预览与打开附件用）。
@@ -207,4 +273,17 @@ bool isImageFileName(String filename) {
       ext == '.webp' ||
       ext == '.bmp' ||
       ext == '.svg';
+}
+
+/// 收集 [sha256.startChunkedConversion] 的摘要。
+class _DigestSink implements Sink<Digest> {
+  Digest? _value;
+
+  Digest get value => _value ?? (throw StateError('分块摘要没有结果'));
+
+  @override
+  void add(Digest data) => _value = data;
+
+  @override
+  void close() {}
 }

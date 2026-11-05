@@ -59,12 +59,12 @@ class MarkdownIo {
   Future<String> exportEntry(Entry entry, String targetDir) async {
     final dir = Directory(targetDir);
     await dir.create(recursive: true);
-    await _copyAttachments(entry, dir);
+    final assets = await _copyAttachments(entry, dir);
     final content = buildMarkdownDocument(
       title: entry.title.trim().isEmpty ? '无标题' : entry.title.trim(),
       date: entry.entryDate,
       tags: tags?.tagsOf(entry.id) ?? const <String>[],
-      body: entry.bodyMd,
+      body: rewriteAssetRefs(entry.bodyMd, assets.names),
     );
     final target = _uniquePath(dir, safeFileName(entry.entryDate, entry.title));
     final file = File(target);
@@ -80,12 +80,13 @@ class MarkdownIo {
     final files = <String>[];
     var attachmentCount = 0;
     for (final entry in all) {
-      attachmentCount += await _copyAttachments(entry, dir);
+      final assets = await _copyAttachments(entry, dir);
+      attachmentCount += assets.copied;
       final content = buildMarkdownDocument(
         title: entry.title.trim().isEmpty ? '无标题' : entry.title.trim(),
         date: entry.entryDate,
         tags: tags?.tagsOf(entry.id) ?? const <String>[],
-        body: entry.bodyMd,
+        body: rewriteAssetRefs(entry.bodyMd, assets.names),
       );
       final target = _uniquePath(
         dir,
@@ -103,15 +104,20 @@ class MarkdownIo {
     );
   }
 
-  Future<int> _copyAttachments(Entry entry, Directory dir) async {
+  /// 导出附件到 `assets/`，返回「sha256 → 导出文件名」映射，用来改写正文引用。
+  ///
+  /// 文件名是 `<原名>-<sha 前 8 位><扩展名>`：比纯哈希好认，又靠 sha 前缀避免重名。
+  Future<_ExportAssets> _copyAttachments(Entry entry, Directory dir) async {
     final list = attachments.listByEntry(entry.id);
-    if (list.isEmpty) return 0;
+    final names = <String, String>{};
+    var copied = 0;
+    if (list.isEmpty) return _ExportAssets(names, 0);
     final assetsDir = Directory(p.join(dir.path, 'assets'));
     await assetsDir.create(recursive: true);
-    var copied = 0;
     for (final attachment in list) {
-      final ext = normalizeExtension(attachment.filename);
-      final target = File(p.join(assetsDir.path, '${attachment.sha256}$ext'));
+      final name = readableAssetName(attachment.filename, attachment.sha256);
+      names[attachment.sha256] = name;
+      final target = File(p.join(assetsDir.path, name));
       if (await target.exists()) continue;
       // 附件字节在库里（v2）；老数据还没有 blob 时回落到磁盘缓存。
       final bytes = attachments.readBlob(attachment.sha256);
@@ -120,12 +126,41 @@ class MarkdownIo {
         copied++;
         continue;
       }
-      final source = store.pathFor(attachment.sha256, ext);
+      final source = store.pathFor(
+        attachment.sha256,
+        normalizeExtension(attachment.filename),
+      );
       if (source == null) continue;
       await File(source).copy(target.path);
       copied++;
     }
-    return copied;
+    return _ExportAssets(names, copied);
+  }
+
+  /// 导出用的附件文件名：`<原名>-<sha 前 8 位><扩展名>`。
+  static String readableAssetName(String filename, String sha256) {
+    final ext = normalizeExtension(filename);
+    final raw = p.basenameWithoutExtension(filename).trim();
+    final safe = raw
+        .replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F]'), '_')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    final clipped = safe.length > 40 ? safe.substring(0, 40) : safe;
+    final prefix = clipped.isEmpty ? 'file' : clipped;
+    return '$prefix-${sha256.substring(0, 8)}$ext';
+  }
+
+  /// 把正文里的 `assets/<sha><ext>` 换成导出后的可读文件名。
+  static String rewriteAssetRefs(String body, Map<String, String> names) {
+    if (names.isEmpty) return body;
+    return body.replaceAllMapped(
+      RegExp(r'assets/([0-9a-fA-F]{64})(\.[A-Za-z0-9]+)?'),
+      (match) {
+        final sha = match.group(1)!.toLowerCase();
+        final name = names[sha];
+        return name == null ? match.group(0)! : 'assets/$name';
+      },
+    );
   }
 
   /// 从目录递归导入 `.md`。已存在相同正文 + 同日期的条目会跳过（重复导入不产生副本）。
@@ -262,4 +297,12 @@ class MarkdownIo {
       '$base-${DateTime.now().millisecondsSinceEpoch}$ext',
     );
   }
+}
+
+/// 一次导出的附件结果：文件名映射 + 实际复制份数。
+class _ExportAssets {
+  const _ExportAssets(this.names, this.copied);
+
+  final Map<String, String> names;
+  final int copied;
 }

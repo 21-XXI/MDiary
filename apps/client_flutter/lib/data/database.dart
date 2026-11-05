@@ -195,6 +195,20 @@ class AppDatabase {
     raw.execute('PRAGMA wal_checkpoint(TRUNCATE)');
   }
 
+  /// 生成一份一致性快照（`VACUUM INTO`，包含 WAL 里已提交但未合并的内容）。
+  void backupTo(String targetPath) {
+    final escaped = targetPath.replaceAll("'", "''");
+    raw.execute("VACUUM INTO '$escaped'");
+  }
+
+  /// 压缩数据库：删掉大量日记/附件后回收文件空间（`VACUUM`）。
+  ///
+  /// 需要独占：调用前不要有未提交事务或打开的结果集。
+  void compact() {
+    raw.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+    raw.execute('VACUUM');
+  }
+
   void dispose() => raw.dispose();
 }
 
