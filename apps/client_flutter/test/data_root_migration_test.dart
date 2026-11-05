@@ -21,7 +21,7 @@ void main() {
   });
 
   void seedSource() {
-    File(p.join(source.path, 'mdiary.sqlite')).writeAsStringSync('sqlite-bytes');
+    seedDatabaseInto(source);
     File(p.join(source.path, 'attachments', 'ab', 'abcdef.png'))
       ..createSync(recursive: true)
       ..writeAsBytesSync(<int>[1, 2, 3]);
@@ -41,7 +41,10 @@ void main() {
     expect(result.target, p.canonicalize(target));
     expect(result.files, 4);
     expect(result.bytes, greaterThan(0));
-    expect(File(p.join(target, 'mdiary.sqlite')).readAsStringSync(), 'sqlite-bytes');
+    expect(
+      File(DataRootMigration.databaseFileIn(target)).readAsStringSync(),
+      'sqlite-bytes',
+    );
     expect(
       File(p.join(target, 'attachments', 'ab', 'abcdef.png')).readAsBytesSync(),
       <int>[1, 2, 3],
@@ -58,7 +61,7 @@ void main() {
   test('目标目录已有 mdiary.sqlite 时拒绝（避免覆盖别人的库）', () async {
     seedSource();
     final target = Directory(p.join(sandbox.path, 'other'))..createSync();
-    File(p.join(target.path, 'mdiary.sqlite')).writeAsStringSync('existing');
+    seedDatabaseInto(target, content: 'existing');
 
     await expectLater(
       DataRootMigration(source: source.path, target: target.path).run(),
@@ -71,7 +74,7 @@ void main() {
       ),
     );
     expect(
-      File(p.join(target.path, 'mdiary.sqlite')).readAsStringSync(),
+      File(DataRootMigration.databaseFileIn(target.path)).readAsStringSync(),
       'existing',
       reason: '目标的库不能被改写',
     );
@@ -143,10 +146,10 @@ void main() {
       exePath: p.join(sandbox.path, 'app', 'mdiary.exe'),
     );
 
-    expect(removed, contains('mdiary.sqlite'));
+    expect(removed, contains('db'));
     expect(removed, contains('attachments'));
     expect(removed, contains('logs'));
-    expect(File(p.join(source.path, 'mdiary.sqlite')).existsSync(), isFalse);
+    expect(File(DataRootMigration.databaseFileIn(source.path)).existsSync(), isFalse);
     expect(File(p.join(source.path, 'notes.txt')).existsSync(), isTrue);
     expect(
       FileSystemEntity.typeSync(source.path),
@@ -172,10 +175,15 @@ void main() {
       exePath: p.join(portable.path, 'mdiary.exe'),
     );
     expect(untouched, isEmpty);
-    expect(File(p.join(portable.path, 'mdiary.sqlite')).existsSync(), isTrue);
+    expect(
+      File(DataRootMigration.databaseFileIn(portable.path)).existsSync(),
+      isTrue,
+    );
   });
 }
 
-void seedDatabaseInto(Directory dir) {
-  File(p.join(dir.path, 'mdiary.sqlite')).writeAsStringSync('sqlite-bytes');
+void seedDatabaseInto(Directory dir, {String content = 'sqlite-bytes'}) {
+  final file = File(DataRootMigration.databaseFileIn(dir.path));
+  file.parent.createSync(recursive: true);
+  file.writeAsStringSync(content);
 }

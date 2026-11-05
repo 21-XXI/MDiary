@@ -111,6 +111,10 @@ class AppPaths {
   static const String locationFileName = 'mdiary-location.txt';
   static const String probeFileName = '.write_probe';
 
+  /// 数据库单独放一个子目录：备份/导入时一眼能认出，不和缓存、日志混在一起。
+  static const String databaseDirName = 'db';
+  static const String databaseFileName = 'mdiary.sqlite';
+
   /// 没有稳定「程序目录」的宿主进程（单测 / dart run），不能拿它做便携目录。
   static const List<String> _testHosts = <String>[
     'flutter_tester',
@@ -169,7 +173,29 @@ class AppPaths {
     adopt(DataRoot(path: normalized, source: DataRootSource.userChosen));
   }
 
-  static String get databaseFile => p.join(root.path, 'mdiary.sqlite');
+  /// 数据库文件位置：`<数据目录>/db/mdiary.sqlite`。
+  static String get databaseFile => databaseFileIn(root.path);
+
+  static String databaseFileIn(String rootPath) =>
+      p.join(rootPath, databaseDirName, databaseFileName);
+
+  static String get databaseDirectory => p.join(root.path, databaseDirName);
+
+  /// 老版本把 `mdiary.sqlite` 直接放在数据目录根：升级到 `db/` 子目录（幂等）。
+  ///
+  /// 在打开数据库之前调用；WAL/SHM 一起搬，避免丢事务。
+  static void migrateLegacyDatabaseLayout() {
+    final target = File(databaseFile);
+    if (target.existsSync()) return;
+    final legacy = File(p.join(root.path, databaseFileName));
+    if (!legacy.existsSync()) return;
+    Directory(target.parent.path).createSync(recursive: true);
+    for (final suffix in <String>['', '-wal', '-shm']) {
+      final file = File('${legacy.path}$suffix');
+      if (!file.existsSync()) continue;
+      file.renameSync('${target.path}$suffix');
+    }
+  }
 
   static String get attachmentsPath => p.join(root.path, 'attachments');
 

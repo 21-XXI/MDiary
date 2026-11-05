@@ -63,8 +63,8 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Clean   # 清理后�
 
 | 内容 | 路径 |
 |---|---|
-| 数据库 | `<exe 目录>\MDiaryData\mdiary.sqlite`（默认） |
-| 附件库 | `<exe 目录>\MDiaryData\attachments\<sha256前两位>\<sha256>.<ext>` |
+| 数据库 | `<exe 目录>\MDiaryData\db\mdiary.sqlite`（默认，单独一个 `db\` 子目录） |
+| 附件缓存 | `<exe 目录>\MDiaryData\attachments\<sha256前两位>\<sha256>.<ext>`（字节在库里，删了会自动重建） |
 | 错误日志 | `<exe 目录>\MDiaryData\logs\error.log`（发生异常时才创建，超过 1 MB 轮转为 `error.log.old`） |
 | 位置记忆 | `<exe 目录>\mdiary-location.txt`（设置页改过数据目录后才出现） |
 | 环境变量覆盖 | `MDIARY_HOME`（实际数据目录为 `%MDIARY_HOME%\MDiary`，测试/CI 用） |

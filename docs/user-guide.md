@@ -58,8 +58,8 @@
 
 | 内容 | 位置 |
 |---|---|
-| 数据库 | `MDiaryData\mdiary.sqlite`（默认在 mdiary.exe 同目录） |
-| 附件 | `MDiaryData\attachments\` |
+| 数据库 | `MDiaryData\db\mdiary.sqlite`（默认在 mdiary.exe 同目录） |
+| 附件 | 存在数据库里；`MDiaryData\attachments\` 只是缓存 |
 | 设置 | 同目录数据库内 `app_meta` 表 |
 
 - **换位置**：设置 → 数据 → 「更改数据目录」，在资源管理器里选个文件夹。

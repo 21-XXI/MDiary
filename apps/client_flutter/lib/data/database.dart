@@ -8,7 +8,6 @@ import '../core/app_paths.dart';
 /// 也避免了 build_runner 代码生成在 CI/首编时的额外失败面。
 class AppDatabase {
   AppDatabase(this.raw);
-
   final Database raw;
 
   static const int schemaVersion = 2;
@@ -30,6 +29,48 @@ class AppDatabase {
   }
 
   factory AppDatabase.openDefault() => AppDatabase.open(AppPaths.databaseFile);
+
+  /// 只读探测一个库文件：判断它是不是可用、schema 版本、有多少篇日记。
+  /// 用于「导入数据库」时先校验，避免把坏文件/新版本文件覆盖到正在用的库上。
+  static DatabaseInfo inspect(String path) {
+    Database? handle;
+    try {
+      handle = sqlite3.open(path, mode: OpenMode.readOnly);
+      final integrityRow = handle.select('PRAGMA integrity_check');
+      final integrity = integrityRow.isEmpty
+          ? 'unknown'
+          : '${integrityRow.first.values.first}';
+      final version =
+          (handle.select('PRAGMA user_version').first['user_version'] as int?) ??
+          0;
+      var entries = 0;
+      try {
+        entries =
+            (handle.select('SELECT COUNT(*) AS c FROM entries').first['c']
+                as int?) ??
+            0;
+      } on Object {
+        entries = -1;
+      }
+      return DatabaseInfo(
+        path: path,
+        ok: integrity == 'ok',
+        version: version,
+        entries: entries,
+        integrity: integrity,
+      );
+    } on Object catch (error) {
+      return DatabaseInfo(
+        path: path,
+        ok: false,
+        version: 0,
+        entries: -1,
+        integrity: '$error',
+      );
+    } finally {
+      handle?.dispose();
+    }
+  }
 
   void _applyPragmas() {
     raw.execute('PRAGMA journal_mode = WAL');
@@ -155,4 +196,27 @@ class AppDatabase {
   }
 
   void dispose() => raw.dispose();
+}
+
+/// 一份数据库文件的探测结果（见 [AppDatabase.inspect]）。
+class DatabaseInfo {
+  const DatabaseInfo({
+    required this.path,
+    required this.ok,
+    required this.version,
+    required this.entries,
+    required this.integrity,
+  });
+
+  final String path;
+  final bool ok;
+
+  /// `PRAGMA user_version`；0 表示空库或不是本程序的库。
+  final int version;
+
+  /// 能读到 entries 表时是篇数，读不到是 -1。
+  final int entries;
+
+  /// `PRAGMA integrity_check` 的结果（正常是 `ok`）。
+  final String integrity;
 }

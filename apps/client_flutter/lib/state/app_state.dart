@@ -21,6 +21,24 @@ import '../data/tag_repository.dart';
 
 enum SaveStatus { idle, dirty, saving, saved, error }
 
+/// 一次「导入数据库」的结果。
+class DatabaseImportResult {
+  const DatabaseImportResult({
+    required this.source,
+    required this.backup,
+    required this.entries,
+  });
+
+  /// 被导入的库文件路径。
+  final String source;
+
+  /// 覆盖前自动备份的旧库路径。
+  final String backup;
+
+  /// 导入后库里的日记篇数。
+  final int entries;
+}
+
 /// 新建附件完成后返回给编辑器插入 Markdown 链接。
 class AttachedFile {
   const AttachedFile({
@@ -561,14 +579,16 @@ class AppState extends ChangeNotifier {
     final migration = DataRootMigration(source: oldRoot, target: normalized);
     await migration.validate();
 
-    // 复制前必须关库：WAL 合并回主库，目标目录只需要一个 mdiary.sqlite。
+    // 复制前必须关库：WAL 合并回主库，目标目录只需要一个 db/mdiary.sqlite。
     db.checkpoint();
     db.dispose();
 
     AppDatabase? reopened;
     try {
       final result = await migration.run();
-      reopened = AppDatabase.open(p.join(normalized, DataRootMigration.databaseName));
+      reopened = AppDatabase.open(
+        DataRootMigration.databaseFileIn(normalized),
+      );
       await AppPaths.switchTo(normalized);
       _rebind(normalized, reopened);
       reopened = null; // 所有权已交给 state
@@ -588,16 +608,113 @@ class AppState extends ChangeNotifier {
       }
       _rebind(
         oldRoot,
-        AppDatabase.open(p.join(oldRoot, DataRootMigration.databaseName)),
+        AppDatabase.open(DataRootMigration.databaseFileIn(oldRoot)),
       );
       await bootstrap();
       rethrow;
     }
   }
 
+  /// 用一个数据库文件覆盖当前库（先校验、先备份，失败自动回滚）。
+  ///
+  /// 只替换 `db/mdiary.sqlite`；如果被导入库的旁边还有 `attachments/`（老版本把附件
+  /// 放在磁盘上），会先把它复制进当前缓存目录，再回填进数据库。
+  Future<DatabaseImportResult> importDatabase(String sourcePath) async {
+    final source = File(sourcePath);
+    if (!source.existsSync()) {
+      throw const DataRootMigrationException('找不到数据库文件');
+    }
+    final live = File(DataRootMigration.databaseFileIn(dataRootPath));
+    if (p.equals(p.canonicalize(source.path), p.canonicalize(live.path))) {
+      throw const DataRootMigrationException('这就是当前正在使用的数据库');
+    }
+
+    final info = AppDatabase.inspect(source.path);
+    if (!info.ok) {
+      throw DataRootMigrationException('这不是可用的 SQLite 数据库：${info.integrity}');
+    }
+    if (info.version > AppDatabase.schemaVersion) {
+      throw DataRootMigrationException(
+        '这个库来自更新的版本（schema v${info.version}），'
+        '当前程序最高支持 v${AppDatabase.schemaVersion}',
+      );
+    }
+
+    await flushNow();
+    _saveDebounce?.cancel();
+    _searchDebounce?.cancel();
+    db.checkpoint();
+    db.dispose();
+
+    Directory(live.parent.path).createSync(recursive: true);
+    final stamp = DateTime.now()
+        .toIso8601String()
+        .replaceAll(RegExp(r'[-:]'), '')
+        .split('.')
+        .first;
+    final backup = File('${live.path}.bak-$stamp');
+    if (live.existsSync()) live.copySync(backup.path);
+
+    void removeSidecars() {
+      for (final suffix in <String>['-wal', '-shm']) {
+        final file = File('${live.path}$suffix');
+        if (file.existsSync()) file.deleteSync();
+      }
+    }
+
+    AppDatabase? opened;
+    try {
+      removeSidecars();
+      source.copySync(live.path);
+      opened = AppDatabase.open(live.path);
+      _rebind(dataRootPath, opened);
+      opened = null;
+      await _importSiblingAttachments(source);
+      await store.backfillFromFiles();
+      await bootstrap();
+      return DatabaseImportResult(
+        source: source.path,
+        backup: backup.path,
+        entries: entryRepo.count(),
+      );
+    } catch (error) {
+      opened?.dispose();
+      // 回滚：把备份覆盖回去，重新打开旧库
+      try {
+        removeSidecars();
+        if (backup.existsSync()) backup.copySync(live.path);
+      } on Object {
+        // 备份都写不回去时也没别的办法了，下面会用现有文件尽量恢复
+      }
+      _rebind(dataRootPath, AppDatabase.open(live.path));
+      await bootstrap();
+      throw DataRootMigrationException('导入失败，已恢复原来的数据库：$error');
+    }
+  }
+
+  /// 老版本把附件放在库旁边的 `attachments/`：复制进当前缓存目录，稍后回填进库。
+  Future<void> _importSiblingAttachments(File sourceDb) async {
+    final candidates = <Directory>[
+      Directory(p.join(sourceDb.parent.path, 'attachments')),
+      Directory(p.join(sourceDb.parent.parent.path, 'attachments')),
+    ];
+    final target = store.directory;
+    await target.create(recursive: true);
+    for (final dir in candidates) {
+      if (!dir.existsSync()) continue;
+      await for (final entity in dir.list(recursive: true, followLinks: false)) {
+        if (entity is! File) continue;
+        final relative = p.relative(entity.path, from: dir.path);
+        final out = File(p.join(target.path, relative));
+        if (out.existsSync()) continue;
+        await out.parent.create(recursive: true);
+        await entity.copy(out.path);
+      }
+    }
+  }
+
   /// 换一套连接/仓库/附件库，并把界面状态复位到「刚打开新库」。
-  void _rebind(String rootPath, AppDatabase database) {
-    db = database;
+  void _rebind(String rootPath, AppDatabase database) {    db = database;
     entryRepo = EntryRepository(database);
     attachmentRepo = AttachmentRepository(database);
     metaRepo = MetaRepository(database);

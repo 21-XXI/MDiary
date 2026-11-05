@@ -31,6 +31,9 @@ Future<void> main() async {
       );
     }
 
+    // 数据库放在 `<数据目录>/db/`；老版本在根目录的库先搬进来（幂等）。
+    AppPaths.migrateLegacyDatabaseLayout();
+    Directory(AppPaths.databaseDirectory).createSync(recursive: true);
     final db = AppDatabase.openDefault();
     final entryRepo = EntryRepository(db);
     final attachmentRepo = AttachmentRepository(db);

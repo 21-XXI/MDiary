@@ -39,8 +39,9 @@ void main() {
     oldRoot = Directory(p.join(sandbox.path, 'old'))..createSync();
     newRoot = Directory(p.join(sandbox.path, 'new'));
 
+    Directory(p.join(oldRoot.path, 'db')).createSync(recursive: true);
     final db = AppDatabase.open(
-      p.join(oldRoot.path, DataRootMigration.databaseName),
+      DataRootMigration.databaseFileIn(oldRoot.path),
     );
     final entryRepo = EntryRepository(db);
     final attachmentRepo = AttachmentRepository(db);
@@ -86,7 +87,7 @@ void main() {
     expect(result.target, target);
     expect(result.files, greaterThanOrEqualTo(2), reason: '库 + 附件');
     expect(state.dataRootPath, target);
-    expect(File(p.join(target, 'mdiary.sqlite')).existsSync(), isTrue);
+    expect(File(DataRootMigration.databaseFileIn(target)).existsSync(), isTrue);
     expect(state.entryRepo.count(), 1);
     expect(state.entries.single.title, '搬家测试');
     expect(
@@ -126,7 +127,7 @@ void main() {
     expect(state.entryRepo.count(), 1);
     expect(state.entries.single.title, '不该丢');
     expect(
-      File(p.join(oldRoot.path, 'mdiary.sqlite')).existsSync(),
+      File(DataRootMigration.databaseFileIn(oldRoot.path)).existsSync(),
       isTrue,
       reason: '回滚后旧库必须还在',
     );
@@ -198,7 +199,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(state.dataRootPath, target);
-    expect(File(p.join(target, 'mdiary.sqlite')).existsSync(), isTrue);
+    expect(File(DataRootMigration.databaseFileIn(target)).existsSync(), isTrue);
     expect(state.entries.single.title, '界面迁移');
     expect(tester.takeException(), isNull);
 

@@ -123,6 +123,15 @@ class SettingsPage extends StatelessWidget {
                   ),
                   onTap: () => _changeDataRoot(context, state),
                 ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.storage),
+                  title: const Text('导入数据库'),
+                  subtitle: const Text(
+                    '从目录里选一个 .sqlite / .db 备份，覆盖当前数据库（会先自动备份当前库）',
+                  ),
+                  onTap: () => _importDatabase(context, state),
+                ),
                 if (state.dataRootNotice != null) ...<Widget>[
                   const Divider(height: 1),
                   ListTile(
@@ -261,6 +270,120 @@ class SettingsPage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// 选目录 -> 列出目录里的库文件 -> 选一个 -> 确认覆盖 -> 导入（先自动备份旧库）。
+  static Future<void> _importDatabase(
+    BuildContext context,
+    AppState state,
+  ) async {
+    final directory = await state.pickDirectory(
+      title: '选择包含数据库文件（.sqlite / .db）的目录',
+    );
+    if (directory == null || !context.mounted) return;
+
+    final candidates = _findDatabaseFiles(Directory(directory));
+    if (!context.mounted) return;
+    if (candidates.isEmpty) {
+      _snack(context, '目录里没有 .sqlite / .db 文件');
+      return;
+    }
+
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('选择要导入的数据库'),
+        children: <Widget>[
+          for (final file in candidates)
+            ListTile(
+              leading: const Icon(Icons.storage),
+              title: Text(p.basename(file.path)),
+              subtitle: Text(
+                '${formatBytes(file.lengthSync())} · '
+                '${formatDateTime(file.lastModifiedSync())}',
+                style: Theme.of(dialogContext).textTheme.bodySmall,
+              ),
+              onTap: () => Navigator.of(dialogContext).pop(file.path),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+            child: Text(
+              '导入会用选中的库覆盖当前数据库，当前库会先自动备份。',
+              style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
+                color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (picked == null || !context.mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('导入并覆盖当前数据库？'),
+        content: Text(
+          '将用「${p.basename(picked)}」替换当前数据库 '
+          '（${state.dataRootPath}）。\n\n当前库会先备份成 '
+          'mdiary.sqlite.bak-<时间>，导入后重启数据层；导入失败会自动回滚。',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('导入'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      final result = await state.importDatabase(picked);
+      if (context.mounted) {
+        _snack(
+          context,
+          '已导入 ${result.entries} 篇日记；原库备份为 ${p.basename(result.backup)}',
+        );
+      }
+    } catch (error) {
+      if (context.mounted) _snack(context, '导入失败：$error');
+    }
+  }
+
+  /// 目录里可能放着一批备份：只挑出像数据库的文件，按修改时间倒序。
+  static List<File> _findDatabaseFiles(Directory directory) {
+    const maxFiles = 50;
+    final result = <File>[];
+    if (!directory.existsSync()) return result;
+    try {
+      for (final entity in directory.listSync(recursive: true, followLinks: false)) {
+        if (result.length >= maxFiles) break;
+        if (entity is! File) continue;
+        final name = p.basename(entity.path).toLowerCase();
+        if (name.endsWith('-wal') ||
+            name.endsWith('-shm') ||
+            name.endsWith('-journal') ||
+            name.contains('.bak-') ||
+            name.endsWith('.bak')) {
+          continue;
+        }
+        if (!(name.endsWith('.sqlite') ||
+            name.endsWith('.sqlite3') ||
+            name.endsWith('.db'))) {
+          continue;
+        }
+        result.add(entity);
+      }
+    } on Object {
+      return result;
+    }
+    result.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+    return result;
   }
 
   /// 选目录 -> 确认 -> 迁移 -> 提示结果。失败时数据仍在旧目录。

@@ -37,8 +37,15 @@ class DataRootMigration {
 
   static const String databaseName = 'mdiary.sqlite';
 
+  /// 数据库子目录（v1.1 起数据库单独放 `db/`）。
+  static const String databaseDir = 'db';
+
+  static String databaseFileIn(String root) =>
+      p.join(root, databaseDir, databaseName);
+
   /// 本程序自己管理的顶层名字；删旧目录时也只动这些。
   static const List<String> managedNames = <String>[
+    databaseDir,
     databaseName,
     'mdiary.sqlite-wal',
     'mdiary.sqlite-shm',
@@ -49,6 +56,9 @@ class DataRootMigration {
 
   /// 目标目录不可用的原因；可用时返回 null。不会创建或修改任何文件。
   static String? blockingReason(String target) {
+    if (File(databaseFileIn(target)).existsSync()) {
+      return '目标目录里已经有 MDiary 数据（$databaseDir/$databaseName），请换一个空文件夹';
+    }
     final dir = Directory(target);
     if (!dir.existsSync()) return null;
     final List<FileSystemEntity> entries;
@@ -85,7 +95,8 @@ class DataRootMigration {
     if (!Directory(src).existsSync()) {
       throw DataRootMigrationException('当前数据目录不存在：$src');
     }
-    if (!File(p.join(src, databaseName)).existsSync()) {
+    if (!File(databaseFileIn(src)).existsSync() &&
+        !File(p.join(src, databaseName)).existsSync()) {
       throw DataRootMigrationException('当前数据目录里没有 $databaseName：$src');
     }
     final blocked = blockingReason(dst);
@@ -103,8 +114,8 @@ class DataRootMigration {
     var files = 0;
     var bytes = 0;
 
-    Future<void> copyFile(File file) async {
-      final relative = p.relative(file.path, from: src);
+    Future<void> copyFile(File file, {String? toRelative}) async {
+      final relative = toRelative ?? p.relative(file.path, from: src);
       final out = File(p.join(dst, relative));
       await out.parent.create(recursive: true);
       await file.copy(out.path);
@@ -120,7 +131,18 @@ class DataRootMigration {
     }
 
     // 数据库必须在最前面：它是「迁移成功」的必要条件，附件缺失只影响预览。
-    await copyFile(File(p.join(src, databaseName)));
+    final dbDir = Directory(p.join(src, databaseDir));
+    if (dbDir.existsSync()) {
+      for (final file in dbDir.listSync(recursive: true).whereType<File>()) {
+        await copyFile(file);
+      }
+    } else {
+      // 老布局：库直接在根目录，搬过去时落到 db/ 下。
+      await copyFile(
+        File(p.join(src, databaseName)),
+        toRelative: p.join(databaseDir, databaseName),
+      );
+    }
 
     final attachments = Directory(p.join(src, 'attachments'));
     if (attachments.existsSync()) {
