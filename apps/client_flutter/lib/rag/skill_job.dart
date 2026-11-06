@@ -244,6 +244,7 @@ class SkillJob {
     final file = File(p.join(dir, 'SKILL.md'));
     file.writeAsStringSync(markdown, flush: true);
     final meta = <String, Object?>{
+      'name': 'mdiary-skill-${_stamp(created)}',
       'created_at': created.toIso8601String(),
       'model': distiller.modelId,
       'bytes': utf8.encode(markdown).length,
@@ -300,8 +301,13 @@ class SkillJob {
   }
 
   String _compose(String body, {required int soulBytes}) {
+    final stamp = _stamp(_clock());
+    final name = 'mdiary-skill-$stamp';
+    final description = _descriptionFrom(body);
     final buffer = StringBuffer()
       ..writeln('---')
+      ..writeln('name: $name')
+      ..writeln('description: ${jsonEncode(description)}')
       ..writeln('generated_by: MDiary')
       ..writeln('model: ${distiller.modelId}')
       ..writeln('created_at: ${_clock().toIso8601String()}')
@@ -323,14 +329,41 @@ class SkillJob {
         '> 已按 ${maxBytes ~/ 1024} KB 预算截断。\n';
   }
 
+  static String _stamp(DateTime t) =>
+      '${t.year}${t.month.toString().padLeft(2, '0')}'
+      '${t.day.toString().padLeft(2, '0')}-'
+      '${t.hour.toString().padLeft(2, '0')}'
+      '${t.minute.toString().padLeft(2, '0')}'
+      '${t.second.toString().padLeft(2, '0')}';
+
+  /// 从正文里挑一句当 description（给 DSH 这类 agent 做技能目录用）。
+  static String _descriptionFrom(String body) {
+    final lines = body.split('\n');
+    for (final line in lines) {
+      final text = line.trim();
+      if (text.startsWith('>')) {
+        final quote = text.substring(1).trim();
+        if (quote.isNotEmpty) return _clip(quote, 160);
+      }
+    }
+    for (final line in lines) {
+      final text = line.trim();
+      if (text.isEmpty || text.startsWith('#') || text.startsWith('---')) {
+        continue;
+      }
+      if (text.startsWith('-')) continue;
+      return _clip(text, 160);
+    }
+    return 'MDiary 日记库蒸馏出的 skill';
+  }
+
+  static String _clip(String text, int max) {
+    final flat = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return flat.length <= max ? flat : '${flat.substring(0, max)}…';
+  }
+
   String _uniqueDirectory(DateTime now) {
-    String stamp(DateTime t) =>
-        '${t.year}${t.month.toString().padLeft(2, '0')}'
-        '${t.day.toString().padLeft(2, '0')}-'
-        '${t.hour.toString().padLeft(2, '0')}'
-        '${t.minute.toString().padLeft(2, '0')}'
-        '${t.second.toString().padLeft(2, '0')}';
-    final base = stamp(now);
+    final base = _stamp(now);
     var candidate = p.join(directory, base);
     if (!Directory(candidate).existsSync()) return candidate;
     for (var i = 2; i < 100; i++) {

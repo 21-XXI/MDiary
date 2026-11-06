@@ -342,7 +342,7 @@ class SettingsPage extends StatelessWidget {
           Card(
             child: ListTile(
               leading: const Icon(Icons.info_outline),
-              title: const Text('MDiary v2.3.0'),
+              title: const Text('MDiary v2.3.1'),
               subtitle: Text(
                 'Markdown 日记 · 本地 SQLite 存储 · 附件内容寻址\n'
                 '运行于 ${Platform.operatingSystem} ${Platform.version.split(' ').first}',

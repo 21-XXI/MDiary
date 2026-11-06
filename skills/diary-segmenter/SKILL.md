@@ -1,3 +1,7 @@
+---
+name: diary-segmenter
+description: 把用户上传的散乱资料按日期切分成 MDiary 可导入的日记目录（父文件夹/日期/当期.md + 附件），含切分规则、写作要求、质检清单与 JSON→目录脚本。
+---
 # SKILL: mdiary-diary-segmenter
 
 > 把用户上传的资料（笔记、聊天记录、旅行流水账、文章草稿）切分成**按日期的日记**，

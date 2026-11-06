@@ -358,7 +358,14 @@ RAG 的产物统一放 `<库目录>/rag/`：索引可重建；`reports/` 与 `so
 - 新增 `skills/diary-segmenter/`（SKILL.md + import-format/manifest 参考 + build_diary.py）；
 - 测试 239 passed（新增 3）。
 
-### 10.8 后续开发起点
+### 10.8 v2.3.1 skill 接 agent（2026-11-06）
+
+- 蒸馏 skill 的 front matter 增加 `name` / `description`（DSH 等 agent 的 catalog 需要）；
+- 新增 `scripts/install-skill.ps1`：校验 front matter 后整目录安装到 `~/.dsh/skills`；
+- 新增 `docs/agent-integration.md`：静态 skill / 蒸馏 skill / CLI / MCP 路线；
+- 已把 `diary-segmenter` 实际装进本机 DSH，catalog 立即可见。
+
+### 10.9 后续开发起点
 
 - **v1.1（打磨）**：先做 backlog A 组（单实例、`ShellExecuteW`、导出幽灵条目、导入大小上限）+ B 组体验项。
 - **v2.0（RAG，本地优先）**：按 §7.6 的路线做切片 + 本地 embedding + sqlite-vec；再看 §7.7 的
