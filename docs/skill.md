@@ -1,7 +1,7 @@
-# 蒸馏 skill（v2.2）
+# 蒸馏 skill（v2.2 起，v2.3.1 接 agent）
 
 > 把 `soul.md` + RAG 索引语料交给**云端大模型**，蒸馏成一份其他模型可以直接加载的 skill。
-> 每次生成新目录，**不覆盖**旧版本。
+> 每次生成新目录，**不覆盖**旧版本。接 agent（DSH/Claude）见 `docs/agent-integration.md`。
 
 ## 1. 入口与开关
 

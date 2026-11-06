@@ -1,7 +1,7 @@
-# v2.0 验收清单
+# v2.3 验收清单
 
 对应 `docs/project.md` 第 3/4 节与 `docs/rag.md`。执行环境：Windows 10/11 x64，
-`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.3.0**（2026-11-06，含 2.3 导入格式）。
+`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.3.1**（2026-11-06，含 2.3.1 skill 接 agent）。
 
 > 状态列：`PASS` / `FAIL`（附现象）/ `BLOCKED`；标「自动」的由 `flutter test` 覆盖。
 > v1.1.1 及更早的验收记录见 git 历史中的 `acceptance-v1.1.md`。
@@ -11,10 +11,10 @@
 | # | 项 | 命令 | 期望 | 状态 |
 |---|---|---|---|---|
 | A1 | 静态分析 | `flutter analyze` | 0 issue | **PASS**（2026-11-06，0 issue） |
-| A2 | 单元/界面测试 | `flutter test` | 全绿 | **PASS**（228 passed） |
+| A2 | 单元/界面测试 | `flutter test` | 全绿 | **PASS**（239 passed） |
 | A3 | Release 构建 | `scripts\build.ps1` | 产出 exe | **PASS**（Release 目录 21.9 MB） |
 | A4 | 冒烟 | `scripts\smoke.ps1` | 启动建库 + 单实例 | **PASS**（verify.ps1 自动执行） |
-| A5 | 交付校验 | `SHA256SUMS.txt` | 与 zip 一致 | **PASS**（`MDiary-2.0.0-windows-x64.zip`） |
+| A5 | 交付校验 | `SHA256SUMS.txt` | 与 zip 一致 | **PASS**（`MDiary-2.3.1-windows-x64.zip`） |
 
 ## B. 书写 / 存储（v1.1.1 能力回归）
 
@@ -129,9 +129,18 @@
 | K5 | 普通目录 | 非日期文件夹 | 保持旧行为，只导入引用附件 | **自动**：`import_folder_test` |
 | K6 | 分词器 skill | `python scripts/build_diary.py` | 生成日期目录 + 当期.md + 附件 | **PASS（实测）** |
 
-## L. 汇总
+## L. v2.3.1 skill 接 agent
 
-- 自动化：`flutter analyze` 0 issue、`flutter test` **228 passed**、构建成功、冒烟通过。
-- 交付：`dist/MDiary-2.0.0-windows-x64/`、同名 zip、`SHA256SUMS.txt`。
+| # | 项 | 操作 | 期望 | 状态 |
+|---|---|---|---|---|
+| L1 | 蒸馏 skill front matter | 生成后看 SKILL.md | 含 `name: mdiary-skill-*` 与 `description` | **自动**：`skill_job_test` |
+| L2 | 安装脚本 | `install-skill.ps1 -Source skills\diary-segmenter` | 复制到 `~/.dsh/skills/diary-segmenter` | **PASS（实测）** |
+| L3 | DSH 目录可见 | 重启/刷新 agent | skill 目录出现 `diary-segmenter` | **PASS（实测）** |
+| L4 | 蒸馏 skill 可装 | 对 `db/skill/<时间>` 执行脚本 | 同样的安装流程可用 | 人工 |
+
+## M. 汇总
+
+- 自动化：`flutter analyze` 0 issue、`flutter test` **239 passed**、构建成功、冒烟通过。
+- 交付：`dist/MDiary-2.3.1-windows-x64/`、同名 zip、`SHA256SUMS.txt`。
 - 待人工确认：B3、G1（真机点击）、H7、H10。
 - 已知限制：问答无多轮记忆；embedding 仅本地；模型质量取决于本机模型。

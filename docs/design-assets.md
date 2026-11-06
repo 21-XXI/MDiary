@@ -1,4 +1,4 @@
-# 美术资源清单（v2.1.0）
+# 美术资源清单（v2.3.1）
 
 > 用途：改 UI / 换品牌时的替换清单。当前**没有任何自有美术资源**：唯一的图片是 Flutter 默认图标，
 > 界面里的图形全部是 Material 图标，没有自定义字体、没有位图插图。
@@ -52,7 +52,7 @@
 |---|---|---|---|
 | B1 | 窗口标题 `MDiary` | `windows/runner/main.cpp` `window.Create(L"MDiary", …)` | 改这里同时要改 `FindWindowW(L"MDiary")` 与互斥名 `Global\MDiary.SingleInstance` |
 | B2 | `MaterialApp(title: 'MDiary')` | `lib/app.dart` | 仅 Windows 任务栏/系统显示用 |
-| B3 | 版本号 `MDiary v2.1.0` | `lib/features/settings_page.dart`（关于） | 与 `pubspec.yaml` 的 `version:` 手动同步 |
+| B3 | 版本号 `MDiary v2.3.1` | `lib/features/settings_page.dart`（关于） | 与 `pubspec.yaml` 的 `version:` 手动同步 |
 | B4 | 启动失败页 `MDiary 启动失败` | `lib/main.dart` | |
 | B5 | exe 元数据：`CompanyName com.mdiary`、`FileDescription / InternalName / ProductName MDiary`、`OriginalFilename mdiary.exe`、版权 | `windows/runner/runner.rc` | 资源管理器「属性 → 详细信息」里可见 |
 | B6 | 数据目录与文件名：`MDiaryData/`、`db/mdiary.sqlite`、`mdiary-location.txt`、`libraries.json`、`rag/`、`soul.md`、`mdiary.exe` | `lib/core/app_paths.dart`、`main.cpp`、打包脚本 | **改名会影响兼容**：老用户数据目录/指针文件找不到，需迁移逻辑 |
@@ -63,7 +63,7 @@
 
 | 项 | 现状 |
 |---|---|
-| 交付包 | `MDiary-2.1.0-windows-x64.zip`，图标随 exe |
+| 交付包 | `MDiary-2.3.1-windows-x64.zip`，图标随 exe |
 | 文档 | README / 使用说明 / 发布说明 / 验收清单 / 交付说明，**纯文字，无配图** |
 | 安装器 | 无（zip 绿色版），没有安装器图标/横幅 |
 | 截图 | 仓库里没有产品截图 |

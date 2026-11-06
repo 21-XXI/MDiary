@@ -288,7 +288,7 @@ RAG 的产物统一放 `<库目录>/rag/`：索引可重建；`reports/` 与 `so
 - （v2.0）RAG 独立界面（问答 / 日报 / 档案）、本地索引与语义管理、日报、`soul.md`、检索接口文档
 - （v3.0）Android APK / iOS TestFlight / macOS dmg / Linux AppImage（+ 同步服务端）
 
-## 10. 交付状态（v1.0 / v1.1 / v1.1.1 / v2.0 2026-11-06 / v2.1 体验补丁）
+## 10. 交付状态（v1.0 / v1.1 / v1.1.1 / v2.0 / v2.1 / v2.2 / v2.3 / v2.3.1）
 
 ### 10.1 已达成（对应第 3 节 Must Have）
 
@@ -316,8 +316,8 @@ RAG 的产物统一放 `<库目录>/rag/`：索引可重建；`reports/` 与 `so
 
 ### 10.2 质量门槛
 
-- `flutter analyze` 0 issue；`flutter test` 230 passed（v2.1）；`flutter build windows --release` 成功。
-- 交付物：`dist/MDiary-2.0.0-windows-x64/` 与同名 zip（含 README / 使用说明 / 交付说明 / 发布说明 / 验收清单）。
+- `flutter analyze` 0 issue；`flutter test` 239 passed（v2.3.1）；`flutter build windows --release` 成功。
+- 交付物：`dist/MDiary-2.3.1-windows-x64/` 与同名 zip（含 README / 使用说明 / 交付说明 / 发布说明 / 验收清单 / skills）。
 
 ### 10.3 已知遗留（v1.1 候选，详见 `docs/backlog-v1.1.md`）
 
@@ -368,9 +368,9 @@ RAG 的产物统一放 `<库目录>/rag/`：索引可重建；`reports/` 与 `so
 ### 10.9 后续开发起点
 
 - **v1.1（打磨）**：先做 backlog A 组（单实例、`ShellExecuteW`、导出幽灵条目、导入大小上限）+ B 组体验项。
-- **v2.0（RAG，本地优先）**：按 §7.6 的路线做切片 + 本地 embedding + sqlite-vec；再看 §7.7 的
-  RAG 独立界面、每日语义管理（含附件索引）、日报（不进日记）、`soul.md`；问答必须带引用，
-  API Key 只存本机；服务端化留给 v3.0。
+- **v2.x（RAG，本地优先）**：v2.0 索引/问答/日报/soul/界面/云端，v2.1 多轮追问与索引状态，
+  v2.2 蒸馏 skill，v2.3 日期文件夹导入 + 分词器 skill，v2.3.1 skill 接 agent（DSH）。
+  后续 2.4 候选：MCP server、skill 管理页；服务端化留给 v3.0。
 - **v3.0（多端 + 同步）**：`services/go_api/` 按 §7.5 起步，pgvector 复用 v2.0 的索引；客户端把写入
   改为「本地库 + 同步队列」双写，`rev` / `device_id` / `deleted_at` 已预留。
 - 开发命令：`scripts/verify.ps1`（analyze + test + build）、`scripts/build.ps1`（含 `--no-tree-shake-icons`）。

@@ -1,11 +1,11 @@
 # MDiary — 跨平台 .md 日记程序
 
-v2.3 目标平台：**Windows 10/11 x64**（v2.x 为本地优先的 RAG；v3.0 再做多端与同步）。
+v2.3.1 目标平台：**Windows 10/11 x64**（v2.x 为本地优先的 RAG；v3.0 再做多端与同步）。
 
 日记以 Markdown 明文保存，本地 SQLite 为唯一真源，附件按内容哈希去重存放，可随时导出为
 通用的 `.md` 目录，不被任何厂商锁定。
 
-## 功能（v2.0）
+## 功能（v2.3）
 
 - Markdown 编辑 + 实时预览（分栏 / 纯预览切换），自动保存，异常退出不丢稿
 - 时间轴列表、置顶、软删除与回收站
@@ -63,7 +63,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Clean   # 清理后�
 
 `scripts/verify.ps1` 一次性跑完 analyze + test + build。
 
-RAG（v2.0）见 [`docs/rag.md`](docs/rag.md)：首页 ✦ 入口，三页签「问答 / 日报 / 档案」；
+RAG（v2.x）见 [`docs/rag.md`](docs/rag.md)：首页 ✦ 入口，三页签「问答 / 日报 / 档案」；
 本地模型可选（默认 `qwen3:8b` + `bge-m3`，见 `docs/bench-ollama.md`），也支持 OpenAI 兼容云端。
 命令行：`dart run tool/rag_search.dart --root <库目录> --reindex`。
 
