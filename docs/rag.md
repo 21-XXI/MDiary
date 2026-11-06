@@ -1,7 +1,7 @@
 # RAG 索引（v2.0 / 2.0.1）
 
 > 状态：**v2.0 已完成**——索引与混合检索、每日语义管理（摘要 + 标签建议）、日报、灵魂档案、
-> RAG 独立界面、流式问答（带引用），以及可配置的交互/生成模型。
+> RAG 独立界面、流式问答（带引用）、可配置的交互/生成模型，以及需要显式开启的云端模型。
 
 ## 1. 产物位置
 
@@ -109,6 +109,8 @@ dart run tool/rag_search.dart --root <库目录> "发票" --json --k 5
 | `tool/rag_soul.dart` | 灵魂档案命令行 |
 | `lib/rag/answer.dart` | 流式问答（Ollama `/api/chat`，关闭 thinking） |
 | `lib/rag/rag_settings.dart` | 交互/生成/向量模型设置（settings.json） |
+| `lib/rag/cloud_client.dart` | 云端 OpenAI 兼容客户端（流式问答 + 非流式摘要） |
+| `lib/core/secret_store.dart` | API Key 的 DPAPI 加解密 |
 | `lib/features/rag_page.dart` | RAG 界面（问答 / 日报 / 档案） |
 | `scripts/bench-ollama.ps1` | 本地模型性能测量 |
 
@@ -244,9 +246,25 @@ qwen3:8b 约 10.5 tok/s、TTFT 0.8 s，30% CPU / 70% GPU 混合推理；bge-m3 1
 - 设置页会「检测本机模型」给出下拉项，改完立即生效；
 - 向量模型或地址变了会关掉旧索引连接，下次检索自动重建。
 
-## 15. 已知限制（v2.0）
+## 15. 云端模型与隐私（2.0.3）
+
+默认**全本地**。设置 → RAG 模型 → 「使用云端模型（隐私开关）」：
+
+- 开启前弹确认框，明确说明会把「问题 + 命中的日记片段」和「摘要/日报/soul 的输入」发到云端；
+- **向量索引永远在本地**，不上传；只有问答与生成可以走云端；
+- 云端地址按 OpenAI 兼容协议（默认 `https://api.openai.com/v1`），模型名可改（默认 `gpt-4o-mini`）；
+- API Key 用 **Windows DPAPI**（`crypt32.dll`，`CryptProtectData`）加密后写进 `settings.json`，
+  只有当前用户能解开；非 Windows 暂退化为 Base64 并在界面提示不安全；
+- 「测试连接」会请求 `/models` 验证地址与 Key；
+- 关掉开关**立即停止上送**；「清除 Key」把密文一起删掉。
+
+实现：`lib/core/secret_store.dart`（DPAPI）、`lib/rag/cloud_client.dart`
+（`CloudAnswerer` 流式 SSE、`CloudSummarizer` 非流式 JSON），`AppState.cloudConfig`
+决定用云端还是本地。
+
+## 16. 已知限制（v2.0）
 
 - 向量检索是暴力扫描，单库 > 5 万切片会变慢；
 - PDF / 图片只索引元数据，不抽正文；
-- 摘要目前只有条目级，chunk 级摘要未做；问答没有多轮记忆（每次独立）；
+- 摘要目前只有条目级，chunk 级摘要未做；问答没有多轮记忆（每次独立）；云端只覆盖问答/生成，embedding 仍本地；
 - 索引不参与「备份数据库」，但可以随时重建。

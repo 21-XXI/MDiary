@@ -10,12 +10,18 @@ class RagSettings {
     this.generateModel = defaultGenerateModel,
     this.embedModel = defaultEmbedModel,
     this.baseUrl = defaultBaseUrl,
+    this.cloudEnabled = false,
+    this.cloudBaseUrl = defaultCloudBaseUrl,
+    this.cloudModel = defaultCloudModel,
+    this.cloudApiKeyCipher = '',
   });
 
   static const String defaultAskModel = 'qwen3:8b';
   static const String defaultGenerateModel = 'qwen3:8b';
   static const String defaultEmbedModel = 'bge-m3';
   static const String defaultBaseUrl = 'http://127.0.0.1:11434';
+  static const String defaultCloudBaseUrl = 'https://api.openai.com/v1';
+  static const String defaultCloudModel = 'gpt-4o-mini';
 
   /// 问答（交互）用模型。
   final String askModel;
@@ -29,16 +35,38 @@ class RagSettings {
   /// Ollama 地址。
   final String baseUrl;
 
+  /// 是否允许把内容发送到云端模型（需显式开启）。
+  final bool cloudEnabled;
+
+  /// OpenAI 兼容地址（例如 `https://api.openai.com/v1`）。
+  final String cloudBaseUrl;
+
+  /// 云端模型名。
+  final String cloudModel;
+
+  /// DPAPI 加密后的 API Key（`dpapi:` / `b64:` 前缀）。
+  final String cloudApiKeyCipher;
+
+  bool get hasCloudKey => cloudApiKeyCipher.isNotEmpty;
+
   RagSettings copyWith({
     String? askModel,
     String? generateModel,
     String? embedModel,
     String? baseUrl,
+    bool? cloudEnabled,
+    String? cloudBaseUrl,
+    String? cloudModel,
+    String? cloudApiKeyCipher,
   }) => RagSettings(
     askModel: askModel ?? this.askModel,
     generateModel: generateModel ?? this.generateModel,
     embedModel: embedModel ?? this.embedModel,
     baseUrl: baseUrl ?? this.baseUrl,
+    cloudEnabled: cloudEnabled ?? this.cloudEnabled,
+    cloudBaseUrl: cloudBaseUrl ?? this.cloudBaseUrl,
+    cloudModel: cloudModel ?? this.cloudModel,
+    cloudApiKeyCipher: cloudApiKeyCipher ?? this.cloudApiKeyCipher,
   );
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -46,6 +74,10 @@ class RagSettings {
     'generate_model': generateModel,
     'embed_model': embedModel,
     'base_url': baseUrl,
+    'cloud_enabled': cloudEnabled,
+    'cloud_base_url': cloudBaseUrl,
+    'cloud_model': cloudModel,
+    'cloud_api_key': cloudApiKeyCipher,
   };
 
   factory RagSettings.fromJson(Map<String, Object?> json) => RagSettings(
@@ -53,6 +85,12 @@ class RagSettings {
     generateModel: _string(json['generate_model'], defaultGenerateModel),
     embedModel: _string(json['embed_model'], defaultEmbedModel),
     baseUrl: _string(json['base_url'], defaultBaseUrl),
+    cloudEnabled: json['cloud_enabled'] == true,
+    cloudBaseUrl: _string(json['cloud_base_url'], defaultCloudBaseUrl),
+    cloudModel: _string(json['cloud_model'], defaultCloudModel),
+    cloudApiKeyCipher: json['cloud_api_key'] is String
+        ? json['cloud_api_key']! as String
+        : '',
   );
 
   static String _string(Object? value, String fallback) {

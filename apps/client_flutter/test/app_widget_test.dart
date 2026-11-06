@@ -361,6 +361,8 @@ void main() {
       200,
       scrollable: settingsScrollable,
     );
+    await tester.ensureVisible(find.text('整库导出'));
+    await tester.pumpAndSettle();
     await tapAsync(tester, find.text('整库导出'));
     expect(libDir.listSync().whereType<File>().length, 1);
     // 从目录导入一个外部 .md
@@ -373,6 +375,8 @@ void main() {
       200,
       scrollable: settingsScrollable,
     );
+    await tester.ensureVisible(find.text('从目录导入 .md'));
+    await tester.pumpAndSettle();
     await tapAsync(tester, find.text('从目录导入 .md'));
 
     expect(state.entryRepo.count(), 2);

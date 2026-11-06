@@ -11,7 +11,9 @@ import '../core/app_paths.dart';
 import '../core/clipboard_image.dart';
 import '../core/ids.dart';
 import '../core/system_open.dart';
+import '../core/secret_store.dart';
 import '../rag/answer.dart';
+import '../rag/cloud_client.dart';
 import '../rag/embedder.dart';
 import '../rag/rag_settings.dart';
 import '../rag/rag_service.dart';
@@ -920,19 +922,57 @@ class AppState extends ChangeNotifier {
         ),
   );
 
+  /// 云端配置；未开启或没有 Key 时为 null（走本地）。
+  CloudConfig? get cloudConfig {
+    if (!_ragSettings.cloudEnabled) return null;
+    final key = SecretStore.unprotect(_ragSettings.cloudApiKeyCipher);
+    if (key == null || key.trim().isEmpty) return null;
+    return CloudConfig(
+      baseUrl: _ragSettings.cloudBaseUrl,
+      model: _ragSettings.cloudModel,
+      apiKey: key.trim(),
+    );
+  }
+
+  bool get cloudEnabled => cloudConfig != null;
+
   Summarizer get ragSummarizer =>
       ragSummarizerOverride ??
-      OllamaSummarizer(
-        model: _ragSettings.generateModel,
-        baseUrl: _ragSettings.baseUrl,
-      );
+      (cloudConfig != null
+          ? CloudSummarizer(cloudConfig!)
+          : OllamaSummarizer(
+              model: _ragSettings.generateModel,
+              baseUrl: _ragSettings.baseUrl,
+            ));
 
   Answerer get ragAnswerer =>
       ragAnswererOverride ??
-      OllamaAnswerer(
-        model: _ragSettings.askModel,
-        baseUrl: _ragSettings.baseUrl,
-      );
+      (cloudConfig != null
+          ? CloudAnswerer(cloudConfig!)
+          : OllamaAnswerer(
+              model: _ragSettings.askModel,
+              baseUrl: _ragSettings.baseUrl,
+            ));
+
+  /// 保存云端 API Key（DPAPI 加密后写 settings.json）。
+  void setCloudApiKey(String plain) {
+    updateRagSettings(
+      _ragSettings.copyWith(
+        cloudApiKeyCipher: plain.trim().isEmpty
+            ? ''
+            : SecretStore.protect(plain.trim()),
+      ),
+    );
+  }
+
+  /// 测试云端连通性；成功返回 null，失败返回原因。
+  Future<String?> testCloud() async {
+    final config = cloudConfig;
+    if (config == null) return '还没有开启云端或没填 API Key';
+    final answerer = CloudAnswerer(config);
+    if (await answerer.isAvailable()) return null;
+    return '连不上 ${config.baseUrl} 或 Key 无效';
+  }
 
   /// 用当前命中的来源生成回答（流式）。
   Stream<String> streamAnswer(String question, List<RagHit> hits) {

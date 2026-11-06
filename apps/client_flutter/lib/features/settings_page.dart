@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 
 import '../core/formatters.dart';
 import '../data/data_root_migration.dart';
+import '../core/secret_store.dart';
 import '../rag/rag_settings.dart';
 import '../state/app_scope.dart';
 import '../state/app_state.dart';
@@ -832,11 +833,100 @@ class _RagModelsCardState extends State<_RagModelsCard> {
   List<String> _models = const <String>[];
   bool _loading = true;
   bool _saved = false;
+  String? _cloudStatus;
+
+  late final TextEditingController _cloudBase = TextEditingController(
+    text: widget.state.ragSettings.cloudBaseUrl,
+  );
+  late final TextEditingController _cloudModel = TextEditingController(
+    text: widget.state.ragSettings.cloudModel,
+  );
+  late final TextEditingController _cloudKey = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _detect();
+  }
+
+  @override
+  void dispose() {
+    _cloudBase.dispose();
+    _cloudModel.dispose();
+    _cloudKey.dispose();
+    super.dispose();
+  }
+
+  Future<void> _toggleCloud(bool enabled) async {
+    if (enabled) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('开启云端模型？'),
+          content: const Text(
+            '开启后，问答的问题与命中的日记片段、以及每日摘要/日报/灵魂档案的输入，'
+            '都会发送到你填写的云端服务。\n\n'
+            '· API Key 只存本机，用 Windows DPAPI 加密；\n'
+            '· 向量索引仍在本地，不上传；\n'
+            '· 随时可以关掉这个开关，关掉后不再上送。',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('我了解，开启'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+    widget.state.updateRagSettings(
+      widget.state.ragSettings.copyWith(cloudEnabled: enabled),
+    );
+    setState(() {
+      _saved = true;
+      _cloudStatus = enabled ? '已开启云端（内容会发送到云端）' : '已关闭云端';
+    });
+  }
+
+  void _saveCloudFields() {
+    widget.state.updateRagSettings(
+      widget.state.ragSettings.copyWith(
+        cloudBaseUrl: _cloudBase.text.trim().isEmpty
+            ? RagSettings.defaultCloudBaseUrl
+            : _cloudBase.text.trim(),
+        cloudModel: _cloudModel.text.trim().isEmpty
+            ? RagSettings.defaultCloudModel
+            : _cloudModel.text.trim(),
+      ),
+    );
+    if (_cloudKey.text.trim().isNotEmpty) {
+      widget.state.setCloudApiKey(_cloudKey.text.trim());
+      _cloudKey.clear();
+    }
+    setState(() {
+      _saved = true;
+      _cloudStatus = '已保存';
+    });
+  }
+
+  void _clearCloudKey() {
+    widget.state.setCloudApiKey('');
+    setState(() {
+      _saved = true;
+      _cloudStatus = '已清除 API Key';
+    });
+  }
+
+  Future<void> _testCloud() async {
+    setState(() => _cloudStatus = '正在测试…');
+    final error = await widget.state.testCloud();
+    if (!mounted) return;
+    setState(() => _cloudStatus = error ?? '连接正常');
   }
 
   Future<void> _detect() async {
@@ -964,6 +1054,84 @@ class _RagModelsCardState extends State<_RagModelsCard> {
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
+        const Divider(height: 24),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: settings.cloudEnabled,
+          onChanged: (value) => _toggleCloud(value),
+          title: const Text('使用云端模型（隐私开关）'),
+          subtitle: Text(
+            settings.cloudEnabled
+                ? '问答/摘要/日报/soul 会发送到 ${settings.cloudBaseUrl}'
+                : '默认全本地；开启后内容会离开本机',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        if (settings.cloudEnabled) ...<Widget>[
+          const SizedBox(height: 4),
+          TextFormField(
+            controller: _cloudBase,
+            decoration: const InputDecoration(
+              labelText: '云端地址（OpenAI 兼容）',
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _cloudModel,
+            decoration: const InputDecoration(
+              labelText: '云端模型（如 gpt-4o-mini）',
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _cloudKey,
+            obscureText: true,
+            decoration: InputDecoration(
+              labelText: settings.hasCloudKey
+                  ? 'API Key（已保存，留空则不修改）'
+                  : 'API Key',
+              isDense: true,
+              border: const OutlineInputBorder(),
+              helperText: SecretStore.isSecure
+                  ? '用 Windows DPAPI 加密保存，只有当前用户能解开'
+                  : '当前平台没有系统密钥环，暂用 Base64（不安全）',
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: <Widget>[
+              FilledButton.tonal(
+                onPressed: _saveCloudFields,
+                child: const Text('保存'),
+              ),
+              TextButton(
+                onPressed: settings.hasCloudKey ? _clearCloudKey : null,
+                child: const Text('清除 Key'),
+              ),
+              TextButton(
+                onPressed: _testCloud,
+                child: const Text('测试连接'),
+              ),
+            ],
+          ),
+          if (_cloudStatus != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                _cloudStatus!,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ),
+        ],
         if (_saved)
           Text(
             '已保存',

@@ -16,6 +16,8 @@ dependencies:
   path: ^1.9.1
   # 附件内容寻址（sha256）
   crypto: ^3.0.8
+  # DPAPI 加密存储 API Key
+  ffi: ^2.1.0
   # 文件/目录选择对话框
   file_picker: ^13.3.1
   # Markdown 渲染（flutter_markdown 的社区续作）
