@@ -11,6 +11,12 @@ import '../core/app_paths.dart';
 import '../core/clipboard_image.dart';
 import '../core/ids.dart';
 import '../core/system_open.dart';
+import '../rag/embedder.dart';
+import '../rag/rag_service.dart';
+import '../rag/report_job.dart';
+import '../rag/semantic_indexer.dart';
+import '../rag/soul_job.dart';
+import '../rag/summarizer.dart';
 import '../data/attachment_repository.dart';
 import '../data/attachment_store.dart';
 import '../data/data_root_migration.dart';
@@ -119,6 +125,8 @@ class AppState extends ChangeNotifier {
     this.dataRootNotice,
     TagRepository? tagRepository,
     ClipboardImageReader? clipboardImageReader,
+    this.ragEmbedder,
+    this.ragSummarizerOverride,
   }) : _filePicker = filePicker ?? _defaultFilePicker,
        _directoryPicker = directoryPicker ?? _defaultDirectoryPicker,
        _clipboardImageReader = clipboardImageReader ?? ClipboardImage.read,
@@ -131,6 +139,10 @@ class AppState extends ChangeNotifier {
   TagRepository tagRepo;
   AttachmentStore store;
   MarkdownIo markdownIo;
+
+  /// 测试可注入的 RAG 依赖（默认走本地 Ollama）。
+  final Embedder? ragEmbedder;
+  final Summarizer? ragSummarizerOverride;
 
   final SingleFilePicker _filePicker;
   final DirectoryPicker _directoryPicker;
@@ -863,6 +875,63 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  // ───────────────────────────── RAG（v2.0） ─────────────────────────────
+
+  RagService? _rag;
+
+  /// 本地 RAG：索引 / 检索 / 日报 / 灵魂档案共用（首次访问时打开）。
+  RagService get rag => _rag ??= RagService.open(
+    libraryRoot: libraryPath,
+    entries: entryRepo,
+    attachments: attachmentRepo,
+    tags: tagRepo,
+    store: store,
+    embedder: ragEmbedder,
+  );
+
+  Summarizer get ragSummarizer => ragSummarizerOverride ?? OllamaSummarizer();
+
+  DailyReportJob get reportJob => DailyReportJob(
+    rag: rag.database,
+    entries: entryRepo,
+    attachments: attachmentRepo,
+    summarizer: ragSummarizer,
+  );
+
+  SoulJob get soulJob => SoulJob(
+    rag: rag.database,
+    entries: entryRepo,
+    tags: tagRepo,
+    attachments: attachmentRepo,
+    summarizer: ragSummarizer,
+  );
+
+  Future<List<RagHit>> ragSearch(String query, {int k = 8}) =>
+      rag.search(query, k: k);
+
+  Future<IndexReport> reindexRag({bool force = false}) =>
+      rag.reindex(force: force);
+
+  RagStats get ragStats => rag.stats();
+
+  List<DateTime> ragReportDates() => reportJob.reportDates();
+
+  String? ragReportMarkdown(DateTime date) => reportJob.markdownOf(date);
+
+  Future<DailyReportRun> backfillReports({bool force = false}) =>
+      reportJob.backfill(force: force);
+
+  Future<DailyReportResult> generateReport(DateTime date, {bool force = false}) =>
+      reportJob.generate(date, force: force);
+
+  String? soulMarkdown() => soulJob.read();
+
+  Future<SoulReport> regenerateSoul({bool force = true}) =>
+      soulJob.generate(force: force);
+
+  Attachment? attachmentById(String? id) =>
+      id == null ? null : attachmentRepo.findById(id);
+
   // ───────────────────────────── 库（可切换的数据库） ─────────────────────────────
 
   /// 当前库目录（里面放着 `mdiary.sqlite`）。
@@ -1177,6 +1246,8 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _rag?.close();
+    _rag = null;
     _searchDebounce?.cancel();
     _saveDebounce?.cancel();
     super.dispose();

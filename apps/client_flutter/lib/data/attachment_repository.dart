@@ -56,6 +56,15 @@ class AttachmentRepository {
     return attachment;
   }
 
+  Attachment? findById(String id) {
+    final rows = _raw.select(
+      'SELECT * FROM attachments WHERE id = ?',
+      <Object?>[id],
+    );
+    if (rows.isEmpty) return null;
+    return Attachment.fromMap(Map<String, Object?>.from(rows.first));
+  }
+
   /// 全库附件（星图用：一次拿到所有「日记 -> 附件」索引关系）。
   List<Attachment> all() {
     final rows = _raw.select(

@@ -15,10 +15,6 @@ import 'data/markdown_io.dart';
 import 'data/meta_repository.dart';
 import 'data/tag_repository.dart';
 import 'rag/daily_job.dart';
-import 'rag/report_job.dart';
-import 'rag/soul_job.dart';
-import 'rag/rag_service.dart';
-import 'rag/summarizer.dart';
 import 'state/app_state.dart';
 
 Future<void> main() async {
@@ -87,56 +83,33 @@ Future<void> main() async {
     unawaited(
       Future<void>(() async {
         await Future<void>.delayed(const Duration(seconds: 5));
-        RagService? rag;
         try {
-          rag = RagService.open(
-            libraryRoot: AppPaths.libraryDir,
-            entries: entryRepo,
-            attachments: attachmentRepo,
-            tags: tagRepo,
-            store: store,
-          );
-          final summarizer = OllamaSummarizer();
+          final summarizer = state.ragSummarizer;
           final job = DailySemanticJob(
-            rag: rag.database,
+            rag: state.rag.database,
             entries: entryRepo,
             tags: tagRepo,
             summarizer: summarizer,
           );
           await runDailyInBackground(
             job: job,
-            reindex: rag.reindex,
+            reindex: state.rag.reindex,
             summarizer: summarizer,
             log: (message) => logger?.log('RAG', message),
           );
 
           // v2.0.5：补齐日报（空日也写，不依赖模型）。
-          final reports = DailyReportJob(
-            rag: rag.database,
-            entries: entryRepo,
-            attachments: attachmentRepo,
-            summarizer: summarizer,
-          );
-          final reportRun = await reports.runIfDue();
+          final reportRun = await state.reportJob.runIfDue();
           logger?.log('RAG', reportRun.toString());
           for (final error in reportRun.errors.take(3)) {
             logger?.log('RAG', '  日报失败：$error');
           }
 
           // v2.0.6：到期时更新灵魂档案（模型不可用则写统计版）。
-          final soul = SoulJob(
-            rag: rag.database,
-            entries: entryRepo,
-            tags: tagRepo,
-            attachments: attachmentRepo,
-            summarizer: summarizer,
-          );
-          final soulRun = await soul.runIfDue();
+          final soulRun = await state.soulJob.runIfDue();
           logger?.log('RAG', soulRun.toString());
         } on Object catch (error, stack) {
           logger?.log('RAG', error, stack);
-        } finally {
-          rag?.close();
         }
       }),
     );

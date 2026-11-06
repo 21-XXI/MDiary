@@ -10,6 +10,7 @@ import '../state/app_state.dart';
 import '../ui/month_calendar.dart';
 import '../ui/widgets.dart';
 import 'entry_editor_page.dart';
+import 'rag_page.dart';
 import 'settings_page.dart';
 import 'star_map/star_map_page.dart';
 import 'trash_page.dart';
@@ -184,7 +185,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       padding: const EdgeInsets.fromLTRB(14, 12, 10, 10),
       child: Column(
         children: <Widget>[
-          Row(
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 6,
             children: <Widget>[
               FilledButton.icon(
                 onPressed: () => state.createEntry(),
@@ -194,7 +199,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                 ),
               ),
-              const Spacer(),
+              _HeaderIconButton(
+                tooltip: 'RAG（问答 / 日报 / 档案）',
+                onPressed: _openRag,
+                icon: const Icon(Icons.auto_awesome_outlined),
+              ),
               _HeaderIconButton(
                 tooltip: '星图',
                 onPressed: _openStarMap,
@@ -437,6 +446,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void _openPage(Widget page) {
     Navigator.of(context)
         .push(MaterialPageRoute<void>(builder: (context) => page));
+  }
+
+  /// RAG 界面里点日记命中 -> 带着那篇回来并选中。
+  Future<void> _openRag() async {
+    final entry = await Navigator.of(context).push<Entry>(
+      MaterialPageRoute<Entry>(builder: (context) => const RagPage()),
+    );
+    if (!mounted || entry == null) return;
+    await AppScope.of(context).select(entry);
   }
 
   /// 星图里点日记星 -> 带着那篇回来并选中，直接进入编辑。
