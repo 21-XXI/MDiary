@@ -342,7 +342,7 @@ class SettingsPage extends StatelessWidget {
           Card(
             child: ListTile(
               leading: const Icon(Icons.info_outline),
-              title: const Text('MDiary v2.0.0'),
+              title: const Text('MDiary v2.1.0'),
               subtitle: Text(
                 'Markdown 日记 · 本地 SQLite 存储 · 附件内容寻址\n'
                 '运行于 ${Platform.operatingSystem} ${Platform.version.split(' ').first}',
@@ -954,6 +954,50 @@ class _RagModelsCardState extends State<_RagModelsCard> {
     ..._models,
   }.where((item) => item.isNotEmpty).toList(growable: false);
 
+  /// 模型下拉：本机已装的选项 + 「自定义…」。
+  Widget _dropdown({
+    required String label,
+    required String current,
+    required ValueChanged<String> onSelect,
+  }) {
+    const custom = '__custom__';
+    final options = <String>[..._options(current), custom];
+    return DropdownButtonFormField<String>(
+      key: ValueKey('$label-$current'),
+      initialValue: current,
+      decoration: InputDecoration(
+        labelText: label,
+        isDense: true,
+        border: const OutlineInputBorder(),
+      ),
+      items: <DropdownMenuItem<String>>[
+        for (final name in options)
+          DropdownMenuItem<String>(
+            value: name,
+            child: Text(name == custom ? '＋ 自定义…' : name),
+          ),
+      ],
+      onChanged: (value) async {
+        if (value == null) return;
+        if (value == custom) {
+          final entered = await showDialog<String>(
+            context: context,
+            builder: (dialogContext) => _NameDialog(
+              title: Text('自定义$label'),
+              initial: current,
+              hintText: '例如 qwen3:4b / gpt-4o-mini',
+              confirmLabel: '使用',
+            ),
+          );
+          if (entered == null || entered.trim().isEmpty) return;
+          onSelect(entered.trim());
+          return;
+        }
+        onSelect(value);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -983,55 +1027,22 @@ class _RagModelsCardState extends State<_RagModelsCard> {
           ],
         ),
         const SizedBox(height: 4),
-        DropdownButtonFormField<String>(
-          initialValue: settings.askModel,
-          decoration: const InputDecoration(
-            labelText: '交互模型（问答）',
-            isDense: true,
-            border: OutlineInputBorder(),
-          ),
-          items: <DropdownMenuItem<String>>[
-            for (final name in _options(settings.askModel))
-              DropdownMenuItem<String>(value: name, child: Text(name)),
-          ],
-          onChanged: (value) {
-            if (value == null) return;
-            _update(settings.copyWith(askModel: value));
-          },
+        _dropdown(
+          label: '交互模型（问答）',
+          current: settings.askModel,
+          onSelect: (value) => _update(settings.copyWith(askModel: value)),
         ),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          initialValue: settings.generateModel,
-          decoration: const InputDecoration(
-            labelText: '生成模型（摘要 / 日报 / soul）',
-            isDense: true,
-            border: OutlineInputBorder(),
-          ),
-          items: <DropdownMenuItem<String>>[
-            for (final name in _options(settings.generateModel))
-              DropdownMenuItem<String>(value: name, child: Text(name)),
-          ],
-          onChanged: (value) {
-            if (value == null) return;
-            _update(settings.copyWith(generateModel: value));
-          },
+        _dropdown(
+          label: '生成模型（摘要 / 日报 / soul）',
+          current: settings.generateModel,
+          onSelect: (value) => _update(settings.copyWith(generateModel: value)),
         ),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          initialValue: settings.embedModel,
-          decoration: const InputDecoration(
-            labelText: '向量模型（索引）',
-            isDense: true,
-            border: OutlineInputBorder(),
-          ),
-          items: <DropdownMenuItem<String>>[
-            for (final name in _options(settings.embedModel))
-              DropdownMenuItem<String>(value: name, child: Text(name)),
-          ],
-          onChanged: (value) {
-            if (value == null) return;
-            _update(settings.copyWith(embedModel: value));
-          },
+        _dropdown(
+          label: '向量模型（索引）',
+          current: settings.embedModel,
+          onSelect: (value) => _update(settings.copyWith(embedModel: value)),
         ),
         const SizedBox(height: 12),
         TextFormField(

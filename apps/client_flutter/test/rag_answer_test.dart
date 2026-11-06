@@ -120,6 +120,49 @@ void main() {
     expect(text, contains('[2026-11-01-杭州出差]'));
   }, skip: false);
 
+  test('多轮追问：带上之前的问答上下文', () async {
+    final hits = <RagHit>[
+      RagHit(
+        chunkId: 'c1',
+        kind: 'entry',
+        label: '杭州出差',
+        text: '去了西湖，风很大。',
+        snippet: '去了西湖，风很大。',
+        date: DateTime(2026, 11, 1),
+        score: 0.9,
+        entryId: 'e1',
+      ),
+    ];
+    final chunks = await state
+        .streamAnswer(
+          '那晚饭吃了什么？',
+          hits,
+          history: <AnswerTurn>[
+            const AnswerTurn(question: '去年去哪了？', answer: '去杭州出差了。'),
+          ],
+        )
+        .toList();
+    expect(chunks.join(), startsWith('（继续）'));
+
+    final prompt = OllamaAnswerer.buildPrompt(
+      question: '那晚饭吃了什么？',
+      sources: <AnswerSource>[
+        AnswerSource(
+          label: '杭州出差',
+          date: DateTime(2026, 11, 1),
+          text: '晚上吃了片儿川。',
+          kind: 'entry',
+        ),
+      ],
+      history: <AnswerTurn>[
+        const AnswerTurn(question: '去年去哪了？', answer: '去杭州出差了。'),
+      ],
+    );
+    expect(prompt, contains('之前的对话'));
+    expect(prompt, contains('去年去哪了？'));
+    expect(prompt, contains('去杭州出差了。'));
+  });
+
   test('提示词包含来源与引用要求', () {
     final prompt = OllamaAnswerer.buildPrompt(
       question: '去年去了哪里？',

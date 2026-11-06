@@ -974,8 +974,12 @@ class AppState extends ChangeNotifier {
     return '连不上 ${config.baseUrl} 或 Key 无效';
   }
 
-  /// 用当前命中的来源生成回答（流式）。
-  Stream<String> streamAnswer(String question, List<RagHit> hits) {
+  /// 用当前命中的来源生成回答（流式，可带最近的对话上下文）。
+  Stream<String> streamAnswer(
+    String question,
+    List<RagHit> hits, {
+    List<AnswerTurn> history = const <AnswerTurn>[],
+  }) {
     final sources = <AnswerSource>[
       for (final hit in hits)
         AnswerSource(
@@ -985,7 +989,11 @@ class AppState extends ChangeNotifier {
           kind: hit.kind,
         ),
     ];
-    return ragAnswerer.streamAnswer(question: question, sources: sources);
+    return ragAnswerer.streamAnswer(
+      question: question,
+      sources: sources,
+      history: history,
+    );
   }
 
   /// 本机 Ollama 已安装的模型（设置页下拉用）。
@@ -1010,8 +1018,10 @@ class AppState extends ChangeNotifier {
   Future<List<RagHit>> ragSearch(String query, {int k = 8}) =>
       rag.search(query, k: k);
 
-  Future<IndexReport> reindexRag({bool force = false}) =>
-      rag.reindex(force: force);
+  Future<IndexReport> reindexRag({
+    bool force = false,
+    void Function(IndexProgress progress)? onProgress,
+  }) => rag.reindex(force: force, onProgress: onProgress);
 
   RagStats get ragStats => rag.stats();
 

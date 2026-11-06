@@ -276,7 +276,7 @@ RAG 的产物统一放 `<库目录>/rag/`：索引可重建；`reports/` 与 `so
 - （v2.0）RAG 独立界面（问答 / 日报 / 档案）、本地索引与语义管理、日报、`soul.md`、检索接口文档
 - （v3.0）Android APK / iOS TestFlight / macOS dmg / Linux AppImage（+ 同步服务端）
 
-## 10. 交付状态（v1.0 2026-11-03 / v1.1 2026-11-05 / v1.1.1 打磨 / v2.0 2026-11-06）
+## 10. 交付状态（v1.0 / v1.1 / v1.1.1 / v2.0 2026-11-06 / v2.1 体验补丁）
 
 ### 10.1 已达成（对应第 3 节 Must Have）
 
@@ -304,7 +304,7 @@ RAG 的产物统一放 `<库目录>/rag/`：索引可重建；`reports/` 与 `so
 
 ### 10.2 质量门槛
 
-- `flutter analyze` 0 issue；`flutter test` 228 passed（v2.0）；`flutter build windows --release` 成功。
+- `flutter analyze` 0 issue；`flutter test` 230 passed（v2.1）；`flutter build windows --release` 成功。
 - 交付物：`dist/MDiary-2.0.0-windows-x64/` 与同名 zip（含 README / 使用说明 / 交付说明 / 发布说明 / 验收清单）。
 
 ### 10.3 已知遗留（v1.1 候选，详见 `docs/backlog-v1.1.md`）
@@ -326,7 +326,14 @@ RAG 的产物统一放 `<库目录>/rag/`：索引可重建；`reports/` 与 `so
 - 模型设置：交互 / 生成 / 向量模型 + Ollama 地址（`settings.json`）；
 - 云端：OpenAI 兼容、需显式开启、Key 用 DPAPI 加密、向量始终本地。
 
-### 10.5 后续开发起点
+### 10.5 v2.1 体验补丁（2026-11-06）
+
+- 问答支持**多轮追问**（保留最近 3 轮）+「新对话」；
+- 回答标注「本地 / 云端」模型来源；
+- 问答页显示索引切片数/向量模型/更新时间，重建索引有进度条；
+- 模型下拉支持「＋ 自定义…」输入未检测到的模型名。
+
+### 10.6 后续开发起点
 
 - **v1.1（打磨）**：先做 backlog A 组（单实例、`ShellExecuteW`、导出幽灵条目、导入大小上限）+ B 组体验项。
 - **v2.0（RAG，本地优先）**：按 §7.6 的路线做切片 + 本地 embedding + sqlite-vec；再看 §7.7 的

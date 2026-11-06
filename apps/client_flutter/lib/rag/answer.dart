@@ -32,6 +32,14 @@ class AnswererUnavailable implements Exception {
   String toString() => message;
 }
 
+/// 一轮已完成的问答（多轮追问用）。
+class AnswerTurn {
+  const AnswerTurn({required this.question, required this.answer});
+
+  final String question;
+  final String answer;
+}
+
 /// 问答生成器（流式）。默认本地 Ollama；测试用 [FakeAnswerer]。
 abstract class Answerer {
   String get modelId;
@@ -41,6 +49,7 @@ abstract class Answerer {
   Stream<String> streamAnswer({
     required String question,
     required List<AnswerSource> sources,
+    List<AnswerTurn> history = const <AnswerTurn>[],
   });
 }
 
@@ -69,6 +78,7 @@ class OllamaAnswerer implements Answerer {
   Stream<String> streamAnswer({
     required String question,
     required List<AnswerSource> sources,
+    List<AnswerTurn> history = const <AnswerTurn>[],
   }) async* {
     if (sources.isEmpty) {
       yield '没有在日记里找到相关内容。换个说法，或先点右上角「重建索引」。';
@@ -78,6 +88,7 @@ class OllamaAnswerer implements Answerer {
       question: question,
       sources: sources,
       maxSourceChars: maxSourceChars,
+      history: history,
     );
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
     try {
@@ -148,11 +159,26 @@ class OllamaAnswerer implements Answerer {
     required String question,
     required List<AnswerSource> sources,
     int maxSourceChars = 900,
+    List<AnswerTurn> history = const <AnswerTurn>[],
   }) {
     final buffer = StringBuffer()
       ..writeln('你是一个日记助手。只根据下面的日记片段回答问题，不要编造。')
       ..writeln('每条事实后面用方括号标注来源，格式：[日期-标题]；没有依据就说「日记里没有提到」。')
-      ..writeln('用中文回答，控制在 200 字以内。')
+      ..writeln('用中文回答，控制在 200 字以内。');
+    if (history.isNotEmpty) {
+      buffer
+        ..writeln()
+        ..writeln('之前的对话（可以结合上下文，但事实仍只能来自片段）：');
+      for (final turn in history.take(3)) {
+        final answer = turn.answer.trim();
+        buffer
+          ..writeln('问：${turn.question.trim()}')
+          ..writeln(
+            '答：${answer.length <= 200 ? answer : '${answer.substring(0, 200)}…'}',
+          );
+      }
+    }
+    buffer
       ..writeln()
       ..writeln('问题：$question')
       ..writeln()
@@ -190,11 +216,13 @@ class FakeAnswerer implements Answerer {
   Stream<String> streamAnswer({
     required String question,
     required List<AnswerSource> sources,
+    List<AnswerTurn> history = const <AnswerTurn>[],
   }) async* {
     if (sources.isEmpty) {
       yield '没有在日记里找到相关内容。';
       return;
     }
+    if (history.isNotEmpty) yield '（继续）';
     yield '根据记录，';
     for (final source in sources.take(3)) {
       yield '${source.citation} 提到「${source.text.characters}」；'.replaceAll(

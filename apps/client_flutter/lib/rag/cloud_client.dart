@@ -75,6 +75,7 @@ class CloudAnswerer implements Answerer {
   Stream<String> streamAnswer({
     required String question,
     required List<AnswerSource> sources,
+    List<AnswerTurn> history = const <AnswerTurn>[],
   }) async* {
     if (sources.isEmpty) {
       yield '没有在日记里找到相关内容。';
@@ -83,6 +84,7 @@ class CloudAnswerer implements Answerer {
     final prompt = OllamaAnswerer.buildPrompt(
       question: question,
       sources: sources,
+      history: history,
     );
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
     try {

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../rag/answer.dart';
 import '../rag/rag_service.dart';
 import '../state/app_scope.dart';
 import '../state/app_state.dart';
@@ -31,6 +32,13 @@ class _RagPageState extends State<RagPage>
   String _answer = '';
   bool _answering = false;
   StreamSubscription<String>? _answerSubscription;
+  List<AnswerTurn> _turns = const <AnswerTurn>[];
+
+  int _chunkCount = 0;
+  String _indexedAt = '';
+  int? _indexDone;
+  int? _indexTotal;
+  bool _reindexing = false;
 
   List<DateTime> _reportDates = const <DateTime>[];
   DateTime? _selectedReport;
@@ -49,6 +57,7 @@ class _RagPageState extends State<RagPage>
       if (!mounted) return;
       _loadReports();
       _loadSoul();
+      _loadStats();
     });
   }
 
@@ -176,7 +185,21 @@ class _RagPageState extends State<RagPage>
                         ),
                         const SizedBox(width: 6),
                         Text('回答', style: theme.textTheme.labelLarge),
+                        const SizedBox(width: 8),
+                        Text(
+                          state.cloudEnabled
+                              ? '云端 ${state.ragSettings.cloudModel}'
+                              : '本地 ${state.ragSettings.askModel}',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
                         const Spacer(),
+                        if (_turns.isNotEmpty)
+                          TextButton(
+                            onPressed: _newConversation,
+                            child: const Text('新对话'),
+                          ),
                         if (_answering)
                           TextButton(
                             onPressed: _stopAnswering,
@@ -194,6 +217,32 @@ class _RagPageState extends State<RagPage>
               ),
             ),
           ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  _chunkCount == 0
+                      ? '还没有索引：点右上角「重建索引」，或等后台每日整理'
+                      : '索引：$_chunkCount 个切片 · 向量 ${state.ragStats.model.isEmpty ? '未知' : state.ragStats.model}'
+                            '${_indexedAt.isEmpty ? '' : ' · 更新于 ${_indexedAt.replaceFirst('T', ' ').split('.').first}'}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              if (_indexTotal != null && _reindexing)
+                SizedBox(
+                  width: 140,
+                  child: LinearProgressIndicator(
+                    value: _indexTotal == 0 ? null : _indexDone! / _indexTotal!,
+                    minHeight: 3,
+                  ),
+                ),
+            ],
+          ),
+        ),
         const SizedBox(height: 8),
         Expanded(
           child: _hits.isEmpty
@@ -264,15 +313,31 @@ class _RagPageState extends State<RagPage>
     }
   }
 
+  Future<void> _loadStats() async {
+    try {
+      final stats = AppScope.of(context).ragStats;
+      if (!mounted) return;
+      setState(() {
+        _chunkCount = stats.chunks;
+        _indexedAt = stats.indexedAt;
+      });
+    } on Object {
+      // 索引库还没建好：忽略
+    }
+  }
+
   void _generateAnswer(AppState state) {
     final query = _query.text.trim();
     if (query.isEmpty || _hits.isEmpty) return;
     _answerSubscription?.cancel();
+    final history = _turns.length <= 3
+        ? _turns
+        : _turns.sublist(_turns.length - 3);
     setState(() {
       _answer = '';
       _answering = true;
     });
-    _answerSubscription = state.streamAnswer(query, _hits).listen(
+    _answerSubscription = state.streamAnswer(query, _hits, history: history).listen(
       (chunk) {
         if (!mounted) return;
         setState(() => _answer += chunk);
@@ -284,10 +349,28 @@ class _RagPageState extends State<RagPage>
       },
       onDone: () {
         if (!mounted) return;
-        setState(() => _answering = false);
+        setState(() {
+          _answering = false;
+          final question = _query.text.trim();
+          if (_answer.trim().isNotEmpty) {
+            _turns = <AnswerTurn>[
+              ..._turns,
+              AnswerTurn(question: question, answer: _answer),
+            ];
+          }
+        });
       },
       cancelOnError: true,
     );
+  }
+
+  void _newConversation() {
+    _answerSubscription?.cancel();
+    setState(() {
+      _turns = const <AnswerTurn>[];
+      _answer = '';
+      _answering = false;
+    });
   }
 
   void _stopAnswering() {
@@ -552,13 +635,35 @@ class _RagPageState extends State<RagPage>
   // ───────────────────────────── 工具 ─────────────────────────────
 
   Future<void> _reindex(AppState state) async {
-    _snack(context, '正在重建索引…');
+    if (_reindexing) return;
+    setState(() {
+      _reindexing = true;
+      _indexDone = 0;
+      _indexTotal = null;
+    });
     try {
-      final report = await state.reindexRag();
+      final report = await state.reindexRag(
+        onProgress: (progress) {
+          if (!mounted) return;
+          setState(() {
+            _indexDone = progress.done;
+            _indexTotal = progress.total;
+          });
+        },
+      );
       if (!mounted) return;
       _snack(context, report.toString());
+      await _loadStats();
     } on Object catch (error) {
       if (mounted) _snack(context, '重建索引失败：$error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _reindexing = false;
+          _indexDone = null;
+          _indexTotal = null;
+        });
+      }
     }
   }
 

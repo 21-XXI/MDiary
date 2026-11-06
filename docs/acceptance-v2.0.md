@@ -1,7 +1,7 @@
 # v2.0 验收清单
 
 对应 `docs/project.md` 第 3/4 节与 `docs/rag.md`。执行环境：Windows 10/11 x64，
-`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.0.0**（2026-11-06）。
+`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.1.0**（2026-11-06，含 2.1 体验补丁）。
 
 > 状态列：`PASS` / `FAIL`（附现象）/ `BLOCKED`；标「自动」的由 `flutter test` 覆盖。
 > v1.1.1 及更早的验收记录见 git 历史中的 `acceptance-v1.1.md`。
@@ -94,7 +94,18 @@
 | H9 | 云端客户端 | OpenAI 兼容服务 | SSE 流式拼接 + JSON 摘要 | **自动**：`cloud_test`（本地假服务） |
 | H10 | 关闭云端 | 关掉开关 | 立即回到本地模型 | 人工 |
 
-## I. 汇总
+## I. v2.1 体验补丁
+
+| # | 项 | 操作 | 期望 | 状态 |
+|---|---|---|---|---|
+| I1 | 多轮追问 | 问两次，第二次用「那…呢」指代 | 回答能接上文 | **自动**：`rag_answer_test` |
+| I2 | 新对话 | 回答后点「新对话」 | 清空回答与上下文 | **自动**：`rag_ui_test` |
+| I3 | 模型来源标注 | 看回答标题旁 | 显示「本地 <模型>」或「云端 <模型>」 | **自动**：`rag_ui_test` |
+| I4 | 索引状态 | 打开问答页 | 显示切片数 / 向量模型 / 更新时间 | **自动**：`rag_ui_test` |
+| I5 | 重建进度 | 点「重建索引」 | 出现进度条，结束时提示统计 | 人工 |
+| I6 | 自定义模型 | 设置里选「＋ 自定义…」 | 可输入任意模型名并保存 | **自动**：`rag_answer_test`（设置持久化）+ 人工 |
+
+## J. 汇总
 
 - 自动化：`flutter analyze` 0 issue、`flutter test` **228 passed**、构建成功、冒烟通过。
 - 交付：`dist/MDiary-2.0.0-windows-x64/`、同名 zip、`SHA256SUMS.txt`。

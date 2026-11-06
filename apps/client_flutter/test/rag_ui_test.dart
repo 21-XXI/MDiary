@@ -152,6 +152,12 @@ void main() {
 
     expect(find.textContaining('根据记录'), findsWidgets);
     expect(find.textContaining('[2026-11-01-杭州]'), findsWidgets);
+    expect(find.textContaining('本地 '), findsWidgets, reason: '应标注模型来源');
+    expect(find.textContaining('索引：'), findsWidgets, reason: '应显示索引状态');
+
+    await tester.tap(find.widgetWithText(TextButton, '新对话'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('根据记录'), findsNothing, reason: '新对话应清空回答');
   }, skip: skip);
 
   testWidgets('日报页：补全后能看到日报并渲染内容', (tester) async {
