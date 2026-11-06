@@ -202,6 +202,11 @@ class _FailingSummarizer implements Summarizer {
   }) async {
     throw SummarizerUnavailable('模型挂了');
   }
+
+  @override
+  Future<SoulSections> generateSoul({required String digest}) async {
+    throw SummarizerUnavailable('模型挂了');
+  }
 }
 
 String? _locateSqlite3() {

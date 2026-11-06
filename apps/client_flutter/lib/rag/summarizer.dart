@@ -29,6 +29,23 @@ class ReportInput {
   final String body;
 }
 
+/// 灵魂档案里需要模型写的几段（其余小节由程序按统计生成）。
+class SoulSections {
+  const SoulSections({
+    required this.person,
+    required this.themes,
+    required this.peoplePlaces,
+    required this.style,
+    required this.recent,
+  });
+
+  final String person;
+  final String themes;
+  final String peoplePlaces;
+  final String style;
+  final String recent;
+}
+
 /// 摘要 / 日报生成器：默认本地 Ollama；测试用 [FakeSummarizer]。
 abstract class Summarizer {
   String get modelId;
@@ -48,6 +65,9 @@ abstract class Summarizer {
     required List<ReportInput> items,
     required List<String> attachments,
   });
+
+  /// 根据「统计 + 摘要样本」概括这个人和这个库（soul.md 的语义部分）。
+  Future<SoulSections> generateSoul({required String digest});
 }
 
 class SummarizerUnavailable implements Exception {
@@ -131,6 +151,58 @@ class OllamaSummarizer implements Summarizer {
     final text = stripFence(content);
     if (text.isEmpty) throw SummarizerUnavailable('模型返回了空日报');
     return text;
+  }
+
+  @override
+  Future<SoulSections> generateSoul({required String digest}) async {
+    final prompt = buildSoulPrompt(digest);
+    final content = await _chat(prompt, jsonFormat: true, temperature: 0.4);
+    final decoded = parseJsonObject(content);
+    String pick(String key) {
+      final value = '${decoded[key] ?? ''}'.trim();
+      return value.isEmpty ? '（模型没有给出）' : value;
+    }
+
+    return SoulSections(
+      person: pick('person'),
+      themes: pick('themes'),
+      peoplePlaces: pick('people_places'),
+      style: pick('style'),
+      recent: pick('recent'),
+    );
+  }
+
+  static String buildSoulPrompt(String digest) =>
+      '你是一个日记库的「灵魂档案」整理器。下面是一个人的日记统计与摘要样本，'
+      '请概括这个人和这个库，输出严格 JSON（不要输出其它内容）：\n'
+      '{"person": "身份/职业/生活状态/价值观，1-4 句", '
+      '"themes": "长期反复出现的主题，1-4 句", '
+      '"people_places": "重要的人、地点、项目，1-4 句", '
+      '"style": "写作与表达的特点，1-3 句", '
+      '"recent": "最近 30 天的状态，1-3 句"}\n'
+      '要求：只依据材料，具体、克制，不要编造；看不出来就写"看不出来"。\n\n'
+      '$digest';
+
+  static Map<String, dynamic> parseJsonObject(String content) {
+    final text = content.trim();
+    if (text.isEmpty) throw SummarizerUnavailable('模型返回了空内容');
+    try {
+      final value = jsonDecode(text);
+      if (value is Map<String, dynamic>) return value;
+    } on FormatException {
+      // 尝试从文本里捞第一个 JSON 对象
+    }
+    final start = text.indexOf('{');
+    final end = text.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      try {
+        final value = jsonDecode(text.substring(start, end + 1));
+        if (value is Map<String, dynamic>) return value;
+      } on FormatException {
+        // 落到下面抛错
+      }
+    }
+    throw SummarizerUnavailable('模型没有返回合法 JSON：${_short(text)}');
   }
 
   Future<String> _chat(
@@ -323,6 +395,16 @@ class FakeSummarizer implements Summarizer {
       tags: <String>[...tags.take(2), '自动整理'],
     );
   }
+
+  @override
+  Future<SoulSections> generateSoul({required String digest}) async =>
+      const SoulSections(
+        person: '（示范）一个在记录生活的人。',
+        themes: '（示范）工作、旅行、阅读。',
+        peoplePlaces: '（示范）杭州、同事、家人。',
+        style: '（示范）短句，少修饰。',
+        recent: '（示范）最近在整理旧日记。',
+      );
 
   @override
   Future<String> generateReport({
