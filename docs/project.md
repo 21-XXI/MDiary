@@ -176,6 +176,9 @@
 
 ### 7.7 语义管理 / 日报 / soul.md / RAG 界面（v2.0）
 
+> **2.0.1 已完成**：`lib/rag/`（切片 / embedding / 索引 / 混合检索）+ `tool/rag_search.dart` 命令行，
+> 细节见 `docs/rag.md`。
+
 RAG 的产物统一放 `<库目录>/rag/`：索引可重建；`reports/` 与 `soul.md` 是生成物，跟着库走。
 **日报不进日记列表**，只在 RAG 界面里看。
 

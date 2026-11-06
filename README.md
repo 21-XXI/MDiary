@@ -63,6 +63,9 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Clean   # 清理后�
 
 `scripts/verify.ps1` 一次性跑完 analyze + test + build。
 
+RAG 索引（v2.0 / 2.0.1）见 [`docs/rag.md`](docs/rag.md)，命令行：
+`dart run tool/rag_search.dart --root <库目录> --reindex`。
+
 ## 数据位置
 
 | 内容 | 路径 |
