@@ -224,6 +224,51 @@ class RagDatabase {
       (raw.select('SELECT COUNT(*) AS c FROM entry_summary').first['c'] as int?) ??
       0;
 
+  // ─────────────────────────── 日报（2.0.5） ───────────────────────────
+
+  String? reportOf(String date) {
+    final rows = raw.select(
+      'SELECT markdown FROM report WHERE date = ?',
+      <Object?>[date],
+    );
+    return rows.isEmpty ? null : rows.first['markdown'] as String?;
+  }
+
+  String? reportModelOf(String date) {
+    final rows = raw.select(
+      'SELECT model FROM report WHERE date = ?',
+      <Object?>[date],
+    );
+    return rows.isEmpty ? null : rows.first['model'] as String?;
+  }
+
+  void upsertReport({
+    required String date,
+    required String markdown,
+    required String model,
+  }) {
+    raw.execute(
+      'INSERT INTO report (date, markdown, model, generated_at) '
+      'VALUES (?, ?, ?, ?) '
+      'ON CONFLICT(date) DO UPDATE SET markdown = excluded.markdown, '
+      'model = excluded.model, generated_at = excluded.generated_at',
+      <Object?>[
+        date,
+        markdown,
+        model,
+        DateTime.now().millisecondsSinceEpoch,
+      ],
+    );
+  }
+
+  /// 已有日报的日期，最新在前。
+  List<String> reportDates() {
+    final rows = raw.select('SELECT date FROM report ORDER BY date DESC');
+    return rows.map((row) => row['date']! as String).toList(growable: false);
+  }
+
+  int reportCount() =>
+      (raw.select('SELECT COUNT(*) AS c FROM report').first['c'] as int?) ?? 0;
   // ─────────────────────────── 每日任务（2.0.4） ───────────────────────────
 
   Map<String, Object?>? job(String id) {

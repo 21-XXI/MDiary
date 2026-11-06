@@ -14,7 +14,22 @@ class EntrySummary {
   };
 }
 
-/// 摘要生成器：默认本地 Ollama；测试用 [FakeSummarizer]。
+/// 日报里的一条记录（给模型看的精简版）。
+class ReportInput {
+  const ReportInput({
+    required this.title,
+    required this.date,
+    required this.summary,
+    required this.body,
+  });
+
+  final String title;
+  final DateTime date;
+  final String summary;
+  final String body;
+}
+
+/// 摘要 / 日报生成器：默认本地 Ollama；测试用 [FakeSummarizer]。
 abstract class Summarizer {
   String get modelId;
 
@@ -25,6 +40,13 @@ abstract class Summarizer {
     required DateTime date,
     required String body,
     required List<String> tags,
+  });
+
+  /// 根据当天记录写一份 Markdown 日报。
+  Future<String> generateReport({
+    required DateTime date,
+    required List<ReportInput> items,
+    required List<String> attachments,
   });
 }
 
@@ -37,7 +59,7 @@ class SummarizerUnavailable implements Exception {
   String toString() => message;
 }
 
-/// 本地 Ollama 的对话接口（`/api/chat`，`format: json`）。
+/// 本地 Ollama 的对话接口（`/api/chat`）。
 class OllamaSummarizer implements Summarizer {
   OllamaSummarizer({
     this.baseUrl = 'http://127.0.0.1:11434',
@@ -90,6 +112,32 @@ class OllamaSummarizer implements Summarizer {
       tags: tags,
       maxBodyChars: maxBodyChars,
     );
+    final content = await _chat(prompt, jsonFormat: true, temperature: 0.2);
+    return parseSummary(content);
+  }
+
+  @override
+  Future<String> generateReport({
+    required DateTime date,
+    required List<ReportInput> items,
+    required List<String> attachments,
+  }) async {
+    final prompt = buildReportPrompt(
+      date: date,
+      items: items,
+      attachments: attachments,
+    );
+    final content = await _chat(prompt, jsonFormat: false, temperature: 0.3);
+    final text = stripFence(content);
+    if (text.isEmpty) throw SummarizerUnavailable('模型返回了空日报');
+    return text;
+  }
+
+  Future<String> _chat(
+    String prompt, {
+    required bool jsonFormat,
+    required double temperature,
+  }) async {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
     try {
       final request = await client.postUrl(Uri.parse('$baseUrl/api/chat'));
@@ -98,8 +146,8 @@ class OllamaSummarizer implements Summarizer {
         jsonEncode(<String, Object>{
           'model': model,
           'stream': false,
-          'format': 'json',
-          'options': <String, Object>{'temperature': 0.2},
+          if (jsonFormat) 'format': 'json',
+          'options': <String, Object>{'temperature': temperature},
           'messages': <Map<String, String>>[
             <String, String>{'role': 'user', 'content': prompt},
           ],
@@ -113,12 +161,11 @@ class OllamaSummarizer implements Summarizer {
         );
       }
       final decoded = jsonDecode(raw);
-      final content = decoded is Map
+      return decoded is Map
           ? (decoded['message'] is Map
                 ? '${(decoded['message'] as Map)['content'] ?? ''}'
                 : '')
           : '';
-      return parseSummary(content);
     } on SocketException catch (error) {
       throw SummarizerUnavailable(
         '连不上本地 Ollama（$baseUrl）：${error.message}。'
@@ -126,6 +173,8 @@ class OllamaSummarizer implements Summarizer {
       );
     } on HttpException catch (error) {
       throw SummarizerUnavailable('本地 Ollama 请求失败：${error.message}');
+    } on FormatException {
+      throw SummarizerUnavailable('Ollama 响应不是合法 JSON');
     } finally {
       client.close(force: true);
     }
@@ -141,16 +190,49 @@ class OllamaSummarizer implements Summarizer {
     final truncated = body.length <= maxBodyChars
         ? body
         : '${body.substring(0, maxBodyChars)}\n……（后文已截断）';
-    final dateText =
-        '${date.year}-${date.month.toString().padLeft(2, '0')}-'
-        '${date.day.toString().padLeft(2, '0')}';
     return '你是一个日记整理助手。请阅读这篇日记，输出严格 JSON（不要输出其它内容）：\n'
         '{"summary": "1-2 句中文摘要，不超过 80 字，只概括事实", '
         '"tags": ["2-4 个短标签"]}\n\n'
-        '日期：$dateText\n'
+        '日期：${formatDate(date)}\n'
         '标题：${title.trim().isEmpty ? '（无标题）' : title.trim()}\n'
         '已有标签：${tags.isEmpty ? '（无）' : tags.join('、')}\n'
         '正文：\n$truncated';
+  }
+
+  static String buildReportPrompt({
+    required DateTime date,
+    required List<ReportInput> items,
+    required List<String> attachments,
+    int maxBodyChars = 320,
+  }) {
+    final buffer = StringBuffer()
+      ..writeln('你是日记整理助手。请根据这一天的记录，写一份中文 Markdown 日报，')
+      ..writeln('必须使用下面三个二级标题（顺序不变）：')
+      ..writeln('## 今天写了什么')
+      ..writeln('## 关键点 / 待办')
+      ..writeln('## 一句话总结')
+      ..writeln('要求：只依据提供的记录，不要编造；每条可以用 [日期-标题] 标注来源；')
+      ..writeln('语气克制，不要空洞抒情。不要输出与日报无关的内容。')
+      ..writeln()
+      ..writeln('日期：${formatDate(date)}');
+    for (final item in items) {
+      final body = item.body.length <= maxBodyChars
+          ? item.body
+          : '${item.body.substring(0, maxBodyChars)}…';
+      buffer
+        ..writeln()
+        ..writeln('- 《${item.title.trim().isEmpty ? '无标题' : item.title.trim()}》')
+        ..writeln(
+          '  摘要：${item.summary.trim().isEmpty ? '（无）' : item.summary.trim()}',
+        )
+        ..writeln('  正文摘录：${body.replaceAll(RegExp(r'\s+'), ' ').trim()}');
+    }
+    if (attachments.isNotEmpty) {
+      buffer
+        ..writeln()
+        ..writeln('当天附件：${attachments.join('、')}');
+    }
+    return buffer.toString();
   }
 
   static EntrySummary parseSummary(String content) {
@@ -194,11 +276,28 @@ class OllamaSummarizer implements Summarizer {
     );
   }
 
+  /// 去掉模型偶尔包在外面的 ``` 代码围栏。
+  static String stripFence(String content) {
+    var text = content.trim();
+    if (text.startsWith('```')) {
+      final newline = text.indexOf('\n');
+      if (newline >= 0) text = text.substring(newline + 1);
+      if (text.endsWith('```')) {
+        text = text.substring(0, text.length - 3);
+      }
+    }
+    return text.trim();
+  }
+
+  static String formatDate(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+
   static String _short(String text) =>
       text.length <= 200 ? text : '${text.substring(0, 200)}…';
 }
 
-/// 测试/离线用：按正文生成一句确定性摘要，不打网络。
+/// 测试/离线用：确定性输出，不打网络。
 class FakeSummarizer implements Summarizer {
   FakeSummarizer({this.model = 'fake'});
 
@@ -223,5 +322,39 @@ class FakeSummarizer implements Summarizer {
       summary: '${title.trim().isEmpty ? '无标题' : title.trim()}：$preview',
       tags: <String>[...tags.take(2), '自动整理'],
     );
+  }
+
+  @override
+  Future<String> generateReport({
+    required DateTime date,
+    required List<ReportInput> items,
+    required List<String> attachments,
+  }) async {
+    final buffer = StringBuffer('## 今天写了什么\n\n');
+    for (final item in items) {
+      final date = OllamaSummarizer.formatDate(item.date);
+      final title = item.title.trim().isEmpty ? '无标题' : item.title.trim();
+      final text = item.summary.isEmpty ? '（无摘要）' : item.summary;
+      buffer.writeln('- [$date-$title] $text');
+    }
+    if (attachments.isNotEmpty) {
+      buffer
+        ..writeln()
+        ..writeln('## 附件')
+        ..writeln();
+      for (final name in attachments) {
+        buffer.writeln('- $name');
+      }
+    }
+    buffer
+      ..writeln()
+      ..writeln('## 关键点 / 待办')
+      ..writeln()
+      ..writeln('- （示范模型没有提炼能力）')
+      ..writeln()
+      ..writeln('## 一句话总结')
+      ..writeln()
+      ..writeln('这一天记了 ${items.length} 条记录。');
+    return buffer.toString().trim();
   }
 }

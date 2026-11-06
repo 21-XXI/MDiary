@@ -193,6 +193,15 @@ class _FailingSummarizer implements Summarizer {
   }) async {
     throw SummarizerUnavailable('模型挂了');
   }
+
+  @override
+  Future<String> generateReport({
+    required DateTime date,
+    required List<ReportInput> items,
+    required List<String> attachments,
+  }) async {
+    throw SummarizerUnavailable('模型挂了');
+  }
 }
 
 String? _locateSqlite3() {
