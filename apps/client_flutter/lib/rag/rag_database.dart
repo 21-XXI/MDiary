@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -16,7 +17,7 @@ class RagDatabase {
   final Database raw;
   final String path;
 
-  static const int schemaVersion = 1;
+  static const int schemaVersion = 2;
 
   static RagDatabase open(String path) {
     Directory(p.dirname(path)).createSync(recursive: true);
@@ -122,6 +123,14 @@ class RagDatabase {
           )
         ''');
       }
+      if (current < 2) {
+        _ensureColumn(
+          raw,
+          'entry_summary',
+          'source_hash',
+          "TEXT NOT NULL DEFAULT ''",
+        );
+      }
       raw.execute('PRAGMA user_version = $schemaVersion');
       raw.execute('COMMIT');
     } catch (error) {
@@ -130,6 +139,123 @@ class RagDatabase {
     }
   }
 
+  /// v2：给已有库补列（新库建表时也会跑到这里，幂等）。
+  static void _ensureColumn(
+    Database raw,
+    String table,
+    String column,
+    String definition,
+  ) {
+    final columns = raw
+        .select('PRAGMA table_info($table)')
+        .map((row) => row['name'])
+        .whereType<String>()
+        .toSet();
+    if (columns.contains(column)) return;
+    raw.execute('ALTER TABLE $table ADD COLUMN $column $definition');
+  }
+
+  // ─────────────────────────── 摘要（2.0.4） ───────────────────────────
+
+  String? entrySummaryHash(String entryId) {
+    final rows = raw.select(
+      'SELECT source_hash FROM entry_summary WHERE entry_id = ?',
+      <Object?>[entryId],
+    );
+    if (rows.isEmpty) return null;
+    final hash = rows.first['source_hash'] as String? ?? '';
+    return hash.isEmpty ? null : hash;
+  }
+
+  String? entrySummaryOf(String entryId) {
+    final rows = raw.select(
+      'SELECT summary FROM entry_summary WHERE entry_id = ?',
+      <Object?>[entryId],
+    );
+    return rows.isEmpty ? null : rows.first['summary'] as String?;
+  }
+
+  List<String> suggestedTagsOf(String entryId) {
+    final rows = raw.select(
+      'SELECT tags_suggested FROM entry_summary WHERE entry_id = ?',
+      <Object?>[entryId],
+    );
+    if (rows.isEmpty) return const <String>[];
+    final rawJson = rows.first['tags_suggested'] as String? ?? '';
+    if (rawJson.isEmpty) return const <String>[];
+    try {
+      final decoded = jsonDecode(rawJson);
+      if (decoded is List) {
+        return decoded.map((item) => '$item').toList(growable: false);
+      }
+    } on Object {
+      // 坏数据当没有
+    }
+    return const <String>[];
+  }
+
+  void upsertEntrySummary({
+    required String entryId,
+    required String summary,
+    required List<String> tags,
+    required String sourceHash,
+    required String model,
+  }) {
+    raw.execute(
+      'INSERT INTO entry_summary '
+      '(entry_id, summary, tags_suggested, generated_at, model, source_hash) '
+      'VALUES (?, ?, ?, ?, ?, ?) '
+      'ON CONFLICT(entry_id) DO UPDATE SET summary = excluded.summary, '
+      'tags_suggested = excluded.tags_suggested, '
+      'generated_at = excluded.generated_at, model = excluded.model, '
+      'source_hash = excluded.source_hash',
+      <Object?>[
+        entryId,
+        summary,
+        jsonEncode(tags),
+        DateTime.now().millisecondsSinceEpoch,
+        model,
+        sourceHash,
+      ],
+    );
+  }
+
+  int summaryCount() =>
+      (raw.select('SELECT COUNT(*) AS c FROM entry_summary').first['c'] as int?) ??
+      0;
+
+  // ─────────────────────────── 每日任务（2.0.4） ───────────────────────────
+
+  Map<String, Object?>? job(String id) {
+    final rows = raw.select('SELECT * FROM job WHERE id = ?', <Object?>[id]);
+    return rows.isEmpty ? null : Map<String, Object?>.from(rows.first);
+  }
+
+  void upsertJob({
+    required String id,
+    required String kind,
+    required String targetDate,
+    required String status,
+    int attempts = 0,
+    String? lastError,
+  }) {
+    raw.execute(
+      'INSERT INTO job (id, kind, target_date, status, attempts, last_error, updated_at) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?) '
+      'ON CONFLICT(id) DO UPDATE SET status = excluded.status, '
+      'attempts = excluded.attempts, last_error = excluded.last_error, '
+      'updated_at = excluded.updated_at',
+      <Object?>[
+        id,
+        kind,
+        targetDate,
+        status,
+        attempts,
+        lastError,
+        DateTime.now().millisecondsSinceEpoch,
+      ],
+    );
+  }
   String? meta(String key) {
     final rows = raw.select(
       'SELECT value FROM index_meta WHERE key = ?',

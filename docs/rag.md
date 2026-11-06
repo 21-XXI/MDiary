@@ -1,7 +1,7 @@
 # RAG 索引（v2.0 / 2.0.1）
 
-> 状态：**2.0.1 已完成**——切片、附件索引、增量重建、混合检索、本地命令行。
-> 尚未接入界面与每日任务（2.0.4/2.0.5/2.0.7 再做）。
+> 状态：**2.0.1 + 2.0.4 已完成**——切片、附件索引、增量重建、混合检索、命令行，
+> 以及每日语义管理（增量索引 + 摘要 + 标签建议）；界面与日报留给 2.0.5/2.0.7。
 
 ## 1. 产物位置
 
@@ -98,11 +98,44 @@ dart run tool/rag_search.dart --root <库目录> "发票" --json --k 5
 | `lib/rag/semantic_indexer.dart` | 增量索引（日记 + 附件） |
 | `lib/rag/rag_service.dart` | 对外的索引/检索入口 |
 | `lib/rag/attachment_text.dart` | 文本类附件抽取 |
-| `tool/rag_search.dart` | 命令行 |
+| `lib/rag/summarizer.dart` | 摘要生成：`OllamaSummarizer`（/api/chat，JSON）+ `FakeSummarizer` |
+| `lib/rag/daily_job.dart` | 每日语义管理：增量摘要、job 表、`last_daily_run` |
+| `lib/rag/content_hash.dart` | 条目/附件内容指纹（索引与摘要共用） |
+| `tool/rag_search.dart` | 索引/检索命令行 |
+| `tool/rag_daily.dart` | 每日语义管理命令行 |
 
-## 9. 已知限制（2.0.1）
+## 9. 每日语义管理（2.0.4）
+
+`DailySemanticJob`：每天第一次启动时，对「新增 / 修改过」的日记生成**摘要 + 标签建议**。
+
+- **触发**：应用启动 5 秒后后台执行（`main.dart`）；今天跑过就跳过；`--force` 可强制重跑。
+- **幂等**：每篇的指纹 = 标题 + 正文 + 日期 + 标签；没变就不调模型。
+- **存储**：`entry_summary(entry_id, summary, tags_suggested, generated_at, model, source_hash)`；
+  `tags_suggested` 只建议，**不会自动改用户标签**。
+- **任务记录**：`job(id='daily:YYYY-MM-DD', status=running/done/partial/failed, attempts, last_error)`；
+  成功后写 `index_meta.last_daily_run`。
+- **失败语义**：模型不可用 → 整次任务 `failed`，**不写** `last_daily_run`，下次启动重试；
+  单篇失败（如解析异常）→ `partial`，其它篇继续。
+- **模型**：默认 `qwen3:8b`（Ollama `/api/chat`，`format: json`），可用 `--model` 换小模型。
+
+命令行：
+
+```bash
+# 增量索引 + 摘要（需要 Ollama + qwen3:8b）
+dart run tool/rag_daily.dart --root <库目录>
+
+# 不联网自检
+dart run tool/rag_daily.dart --root <库目录> --fake --verbose
+
+# 强制重跑今天
+dart run tool/rag_daily.dart --root <库目录> --force
+```
+
+退出码：`0` 成功/跳过，`1` 参数/数据错误，`2` 本地模型不可用，`3` 有单篇失败（partial）。
+
+## 10. 已知限制（2.0.1 / 2.0.4）
 
 - 向量检索是暴力扫描，单库 > 5 万切片会变慢；
 - PDF / 图片只索引元数据，不抽正文；
-- 没有界面、没有每日任务、没有日报与 soul.md（后续 2.0.4–2.0.7）；
+- 还没有 RAG 界面、日报与 soul.md（后续 2.0.5–2.0.7）；摘要目前只有条目级，chunk 级摘要未做；
 - 索引不参与「备份数据库」，但可以随时重建。

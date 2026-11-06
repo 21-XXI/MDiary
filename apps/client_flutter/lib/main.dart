@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -13,6 +14,9 @@ import 'data/entry_repository.dart';
 import 'data/markdown_io.dart';
 import 'data/meta_repository.dart';
 import 'data/tag_repository.dart';
+import 'rag/daily_job.dart';
+import 'rag/rag_service.dart';
+import 'rag/summarizer.dart';
 import 'state/app_state.dart';
 
 Future<void> main() async {
@@ -76,6 +80,40 @@ Future<void> main() async {
       logger.log('Startup', '已自动备份数据库：$autoBackup');
     }
     runApp(MDiaryApp(state: state));
+
+    // v2.0.4：每天第一次启动时后台做「增量索引 + 摘要」；本地模型不可用就跳过。
+    unawaited(
+      Future<void>(() async {
+        await Future<void>.delayed(const Duration(seconds: 5));
+        RagService? rag;
+        try {
+          rag = RagService.open(
+            libraryRoot: AppPaths.libraryDir,
+            entries: entryRepo,
+            attachments: attachmentRepo,
+            tags: tagRepo,
+            store: store,
+          );
+          final summarizer = OllamaSummarizer();
+          final job = DailySemanticJob(
+            rag: rag.database,
+            entries: entryRepo,
+            tags: tagRepo,
+            summarizer: summarizer,
+          );
+          await runDailyInBackground(
+            job: job,
+            reindex: rag.reindex,
+            summarizer: summarizer,
+            log: (message) => logger?.log('RAG', message),
+          );
+        } on Object catch (error, stack) {
+          logger?.log('RAG', error, stack);
+        } finally {
+          rag?.close();
+        }
+      }),
+    );
     if (Platform.isWindows) {
       // 拖拽导入：资源管理器 -> 窗口，文件挂到当前日记上。
       FileDropChannel.install((paths) async {

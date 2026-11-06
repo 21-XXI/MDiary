@@ -178,6 +178,9 @@
 
 > **2.0.1 已完成**：`lib/rag/`（切片 / embedding / 索引 / 混合检索）+ `tool/rag_search.dart` 命令行，
 > 细节见 `docs/rag.md`。
+>
+> **2.0.4 已完成**：`lib/rag/daily_job.dart` 每日增量索引 + 摘要（`entry_summary`）+ 标签建议，
+> 任务状态记在 `job` 表，启动 5 秒后后台跑；命令行 `tool/rag_daily.dart`。
 
 RAG 的产物统一放 `<库目录>/rag/`：索引可重建；`reports/` 与 `soul.md` 是生成物，跟着库走。
 **日报不进日记列表**，只在 RAG 界面里看。
