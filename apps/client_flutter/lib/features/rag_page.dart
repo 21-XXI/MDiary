@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -26,6 +28,9 @@ class _RagPageState extends State<RagPage>
   List<RagHit> _hits = const <RagHit>[];
   bool _searching = false;
   bool _searched = false;
+  String _answer = '';
+  bool _answering = false;
+  StreamSubscription<String>? _answerSubscription;
 
   List<DateTime> _reportDates = const <DateTime>[];
   DateTime? _selectedReport;
@@ -49,6 +54,7 @@ class _RagPageState extends State<RagPage>
 
   @override
   void dispose() {
+    _answerSubscription?.cancel();
     _tabs.dispose();
     _query.dispose();
     super.dispose();
@@ -117,7 +123,7 @@ class _RagPageState extends State<RagPage>
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               FilledButton.icon(
                 onPressed: _searching ? null : () => _search(state),
                 icon: _searching
@@ -126,8 +132,16 @@ class _RagPageState extends State<RagPage>
                         height: 14,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.auto_awesome, size: 18),
+                    : const Icon(Icons.search, size: 18),
                 label: const Text('检索'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.tonalIcon(
+                onPressed: _answering || _hits.isEmpty
+                    ? null
+                    : () => _generateAnswer(state),
+                icon: const Icon(Icons.auto_awesome, size: 18),
+                label: Text(_answering ? '生成中…' : '生成回答'),
               ),
             ],
           ),
@@ -144,6 +158,42 @@ class _RagPageState extends State<RagPage>
             ),
           ),
         ),
+        if (_answer.isNotEmpty || _answering)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Icon(
+                          Icons.auto_awesome,
+                          size: 16,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text('回答', style: theme.textTheme.labelLarge),
+                        const Spacer(),
+                        if (_answering)
+                          TextButton(
+                            onPressed: _stopAnswering,
+                            child: const Text('停止'),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    SelectableText(
+                      _answer.isEmpty ? '正在生成…' : _answer,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         const SizedBox(height: 8),
         Expanded(
           child: _hits.isEmpty
@@ -212,6 +262,37 @@ class _RagPageState extends State<RagPage>
     } finally {
       if (mounted) setState(() => _searching = false);
     }
+  }
+
+  void _generateAnswer(AppState state) {
+    final query = _query.text.trim();
+    if (query.isEmpty || _hits.isEmpty) return;
+    _answerSubscription?.cancel();
+    setState(() {
+      _answer = '';
+      _answering = true;
+    });
+    _answerSubscription = state.streamAnswer(query, _hits).listen(
+      (chunk) {
+        if (!mounted) return;
+        setState(() => _answer += chunk);
+      },
+      onError: (Object error) {
+        if (!mounted) return;
+        setState(() => _answering = false);
+        _snack(context, '生成失败：$error');
+      },
+      onDone: () {
+        if (!mounted) return;
+        setState(() => _answering = false);
+      },
+      cancelOnError: true,
+    );
+  }
+
+  void _stopAnswering() {
+    _answerSubscription?.cancel();
+    setState(() => _answering = false);
   }
 
   Future<void> _openHit(AppState state, RagHit hit) async {

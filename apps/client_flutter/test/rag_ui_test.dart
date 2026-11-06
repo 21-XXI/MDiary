@@ -16,6 +16,7 @@ import 'package:mdiary/data/markdown_io.dart';
 import 'package:mdiary/data/meta_repository.dart';
 import 'package:mdiary/data/tag_repository.dart';
 import 'package:mdiary/features/rag_page.dart';
+import 'package:mdiary/rag/answer.dart';
 import 'package:mdiary/rag/embedder.dart';
 import 'package:mdiary/rag/summarizer.dart';
 import 'package:mdiary/state/app_state.dart';
@@ -68,6 +69,7 @@ void main() {
       dataRootPath: root.path,
       ragEmbedder: HashingEmbedder(dimension: 64),
       ragSummarizerOverride: FakeSummarizer(),
+      ragAnswererOverride: FakeAnswerer(),
     );
     await state.bootstrap();
   });
@@ -127,6 +129,29 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(RagPage), findsNothing, reason: '应回到主界面');
     expect(state.selected?.title, '杭州');
+  }, skip: skip);
+
+  testWidgets('问答页：检索后可以生成带引用的流式回答', (tester) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await seed();
+    await tester.pumpWidget(MDiaryApp(state: state));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('RAG（问答 / 日报 / 档案）'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, '西湖');
+    await tester.tap(find.widgetWithText(FilledButton, '检索'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, '生成回答'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('根据记录'), findsWidgets);
+    expect(find.textContaining('[2026-11-01-杭州]'), findsWidgets);
   }, skip: skip);
 
   testWidgets('日报页：补全后能看到日报并渲染内容', (tester) async {

@@ -11,7 +11,9 @@ import '../core/app_paths.dart';
 import '../core/clipboard_image.dart';
 import '../core/ids.dart';
 import '../core/system_open.dart';
+import '../rag/answer.dart';
 import '../rag/embedder.dart';
+import '../rag/rag_settings.dart';
 import '../rag/rag_service.dart';
 import '../rag/report_job.dart';
 import '../rag/semantic_indexer.dart';
@@ -127,10 +129,15 @@ class AppState extends ChangeNotifier {
     ClipboardImageReader? clipboardImageReader,
     this.ragEmbedder,
     this.ragSummarizerOverride,
+    this.ragAnswererOverride,
+    RagSettingsStore? ragSettingsStore,
   }) : _filePicker = filePicker ?? _defaultFilePicker,
+       _ragSettingsStore = ragSettingsStore ?? RagSettingsStore(),
        _directoryPicker = directoryPicker ?? _defaultDirectoryPicker,
        _clipboardImageReader = clipboardImageReader ?? ClipboardImage.read,
-       tagRepo = tagRepository ?? TagRepository(db);
+       tagRepo = tagRepository ?? TagRepository(db) {
+    _ragSettings = _ragSettingsStore.load();
+  }
 
   AppDatabase db;
   EntryRepository entryRepo;
@@ -143,6 +150,25 @@ class AppState extends ChangeNotifier {
   /// 测试可注入的 RAG 依赖（默认走本地 Ollama）。
   final Embedder? ragEmbedder;
   final Summarizer? ragSummarizerOverride;
+  final Answerer? ragAnswererOverride;
+  final RagSettingsStore _ragSettingsStore;
+  late RagSettings _ragSettings;
+
+  /// 当前模型设置（全局，写在 `<数据目录>/settings.json`）。
+  RagSettings get ragSettings => _ragSettings;
+
+  void updateRagSettings(RagSettings next) {
+    final embedChanged =
+        next.embedModel != _ragSettings.embedModel ||
+        next.baseUrl != _ragSettings.baseUrl;
+    _ragSettings = next;
+    _ragSettingsStore.save(next);
+    if (embedChanged) {
+      _rag?.close();
+      _rag = null;
+    }
+    notifyListeners();
+  }
 
   final SingleFilePicker _filePicker;
   final DirectoryPicker _directoryPicker;
@@ -886,10 +912,45 @@ class AppState extends ChangeNotifier {
     attachments: attachmentRepo,
     tags: tagRepo,
     store: store,
-    embedder: ragEmbedder,
+    embedder:
+        ragEmbedder ??
+        OllamaEmbedder(
+          model: _ragSettings.embedModel,
+          baseUrl: _ragSettings.baseUrl,
+        ),
   );
 
-  Summarizer get ragSummarizer => ragSummarizerOverride ?? OllamaSummarizer();
+  Summarizer get ragSummarizer =>
+      ragSummarizerOverride ??
+      OllamaSummarizer(
+        model: _ragSettings.generateModel,
+        baseUrl: _ragSettings.baseUrl,
+      );
+
+  Answerer get ragAnswerer =>
+      ragAnswererOverride ??
+      OllamaAnswerer(
+        model: _ragSettings.askModel,
+        baseUrl: _ragSettings.baseUrl,
+      );
+
+  /// 用当前命中的来源生成回答（流式）。
+  Stream<String> streamAnswer(String question, List<RagHit> hits) {
+    final sources = <AnswerSource>[
+      for (final hit in hits)
+        AnswerSource(
+          label: hit.label,
+          date: hit.date,
+          text: hit.text,
+          kind: hit.kind,
+        ),
+    ];
+    return ragAnswerer.streamAnswer(question: question, sources: sources);
+  }
+
+  /// 本机 Ollama 已安装的模型（设置页下拉用）。
+  Future<List<String>> installedModels() =>
+      listOllamaModels(baseUrl: _ragSettings.baseUrl);
 
   DailyReportJob get reportJob => DailyReportJob(
     rag: rag.database,

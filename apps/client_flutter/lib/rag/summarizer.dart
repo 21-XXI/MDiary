@@ -218,6 +218,7 @@ class OllamaSummarizer implements Summarizer {
         jsonEncode(<String, Object>{
           'model': model,
           'stream': false,
+          'think': false,
           if (jsonFormat) 'format': 'json',
           'options': <String, Object>{'temperature': temperature},
           'messages': <Map<String, String>>[

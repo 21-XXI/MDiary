@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 
 import '../core/formatters.dart';
 import '../data/data_root_migration.dart';
+import '../rag/rag_settings.dart';
 import '../state/app_scope.dart';
 import '../state/app_state.dart';
 import '../ui/widgets.dart';
@@ -85,7 +86,13 @@ class SettingsPage extends StatelessWidget {
               ),
             ),
           ),
-          const SectionLabel('数据'),
+          const SectionLabel('RAG 模型'),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: _RagModelsCard(state: state),
+            ),
+          ),          const SectionLabel('数据'),
           Card(
             child: Column(
               children: <Widget>[
@@ -806,6 +813,164 @@ class _NameDialogState extends State<_NameDialog> {
           onPressed: () => Navigator.of(context).pop(_controller.text),
           child: Text(widget.confirmLabel),
         ),
+      ],
+    );
+  }
+}
+
+/// 设置页里的 RAG 模型选择：交互模型（问答）/ 生成模型（摘要、日报、soul）/ 向量模型。
+class _RagModelsCard extends StatefulWidget {
+  const _RagModelsCard({required this.state});
+
+  final AppState state;
+
+  @override
+  State<_RagModelsCard> createState() => _RagModelsCardState();
+}
+
+class _RagModelsCardState extends State<_RagModelsCard> {
+  List<String> _models = const <String>[];
+  bool _loading = true;
+  bool _saved = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _detect();
+  }
+
+  Future<void> _detect() async {
+    setState(() => _loading = true);
+    try {
+      final models = await widget.state.installedModels();
+      if (!mounted) return;
+      setState(() {
+        _models = models;
+        _loading = false;
+      });
+    } on Object {
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
+  }
+
+  void _update(RagSettings next) {
+    widget.state.updateRagSettings(next);
+    setState(() => _saved = true);
+  }
+
+  List<String> _options(String current) => <String>{
+    current,
+    ..._models,
+  }.where((item) => item.isNotEmpty).toList(growable: false);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final settings = widget.state.ragSettings;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                _loading
+                    ? '正在检测本机 Ollama 模型…'
+                    : _models.isEmpty
+                    ? '没检测到模型（Ollama 是否在运行？）'
+                    : '已检测到 ${_models.length} 个模型',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: _loading ? null : _detect,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('重新检测'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        DropdownButtonFormField<String>(
+          initialValue: settings.askModel,
+          decoration: const InputDecoration(
+            labelText: '交互模型（问答）',
+            isDense: true,
+            border: OutlineInputBorder(),
+          ),
+          items: <DropdownMenuItem<String>>[
+            for (final name in _options(settings.askModel))
+              DropdownMenuItem<String>(value: name, child: Text(name)),
+          ],
+          onChanged: (value) {
+            if (value == null) return;
+            _update(settings.copyWith(askModel: value));
+          },
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          initialValue: settings.generateModel,
+          decoration: const InputDecoration(
+            labelText: '生成模型（摘要 / 日报 / soul）',
+            isDense: true,
+            border: OutlineInputBorder(),
+          ),
+          items: <DropdownMenuItem<String>>[
+            for (final name in _options(settings.generateModel))
+              DropdownMenuItem<String>(value: name, child: Text(name)),
+          ],
+          onChanged: (value) {
+            if (value == null) return;
+            _update(settings.copyWith(generateModel: value));
+          },
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          initialValue: settings.embedModel,
+          decoration: const InputDecoration(
+            labelText: '向量模型（索引）',
+            isDense: true,
+            border: OutlineInputBorder(),
+          ),
+          items: <DropdownMenuItem<String>>[
+            for (final name in _options(settings.embedModel))
+              DropdownMenuItem<String>(value: name, child: Text(name)),
+          ],
+          onChanged: (value) {
+            if (value == null) return;
+            _update(settings.copyWith(embedModel: value));
+          },
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          initialValue: settings.baseUrl,
+          decoration: const InputDecoration(
+            labelText: 'Ollama 地址',
+            isDense: true,
+            border: OutlineInputBorder(),
+          ),
+          onFieldSubmitted: (value) {
+            if (value.trim().isEmpty) return;
+            _update(settings.copyWith(baseUrl: value.trim()));
+          },
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '改完立即生效，保存在数据目录的 settings.json；换交互模型会影响问答速度，'
+          '换生成模型会影响摘要/日报/灵魂档案。向量模型变了会自动重建索引。',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        if (_saved)
+          Text(
+            '已保存',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.primary,
+            ),
+          ),
       ],
     );
   }
