@@ -352,7 +352,13 @@ RAG 的产物统一放 `<库目录>/rag/`：索引可重建；`reports/` 与 `so
 - 新增 `lib/rag/skill_job.dart`、`lib/features/skill_page.dart`、`docs/skill.md`；
 - 测试 236 passed（新增 8）。
 
-### 10.7 后续开发起点
+### 10.7 v2.3 导入格式与分词器 skill（2026-11-06）
+
+- 导入支持 `父文件夹/日期/当期.md` + 同目录附件（日期文件夹优先于 mtime；未引用文件也收为附件）；
+- 新增 `skills/diary-segmenter/`（SKILL.md + import-format/manifest 参考 + build_diary.py）；
+- 测试 239 passed（新增 3）。
+
+### 10.8 后续开发起点
 
 - **v1.1（打磨）**：先做 backlog A 组（单实例、`ShellExecuteW`、导出幽灵条目、导入大小上限）+ B 组体验项。
 - **v2.0（RAG，本地优先）**：按 §7.6 的路线做切片 + 本地 embedding + sqlite-vec；再看 §7.7 的

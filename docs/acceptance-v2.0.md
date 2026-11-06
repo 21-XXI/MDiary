@@ -1,7 +1,7 @@
 # v2.0 验收清单
 
 对应 `docs/project.md` 第 3/4 节与 `docs/rag.md`。执行环境：Windows 10/11 x64，
-`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.2.0**（2026-11-06，含 2.2 蒸馏）。
+`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.3.0**（2026-11-06，含 2.3 导入格式）。
 
 > 状态列：`PASS` / `FAIL`（附现象）/ `BLOCKED`；标「自动」的由 `flutter test` 覆盖。
 > v1.1.1 及更早的验收记录见 git 历史中的 `acceptance-v1.1.md`。
@@ -118,7 +118,18 @@
 | J7 | 没有云端 | 关掉云端开关 | 按钮置灰并提示去设置 | 人工 |
 | J8 | 大小上限 | 超长输出 | 截断到 16 KB 并注明 | **自动**：`skill_job_test` |
 
-## K. 汇总
+## K. v2.3 导入格式
+
+| # | 项 | 操作 | 期望 | 状态 |
+|---|---|---|---|---|
+| K1 | 日期文件夹 | `日记/2026-11-06/当期.md` | 日期取文件夹，不是 mtime | **自动**：`import_folder_test` |
+| K2 | 中文日期 | `2026年11月7日/当期.md` | 正确解析 | **自动**：`import_folder_test` |
+| K3 | 同目录附件 | 日期文件夹里放 png/txt | 未被引用也导入并追加 `## 附件` | **自动**：`import_folder_test` |
+| K4 | 已引用不重复 | 正文 `![](西湖.png)` | 附件只一条，无重复列表 | **自动**：`import_folder_test` |
+| K5 | 普通目录 | 非日期文件夹 | 保持旧行为，只导入引用附件 | **自动**：`import_folder_test` |
+| K6 | 分词器 skill | `python scripts/build_diary.py` | 生成日期目录 + 当期.md + 附件 | **PASS（实测）** |
+
+## L. 汇总
 
 - 自动化：`flutter analyze` 0 issue、`flutter test` **228 passed**、构建成功、冒烟通过。
 - 交付：`dist/MDiary-2.0.0-windows-x64/`、同名 zip、`SHA256SUMS.txt`。

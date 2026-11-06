@@ -199,7 +199,9 @@ class MarkdownIo {
         final doc = parseMarkdownDocument(content, debugName: file.path);
         // 与导出侧保持一致：尾部空行不影响内容判定，否则「导出再导入」会被当成新条目
         final body = doc.body.trimRight();
-        final date = doc.date ?? stat.modified;
+        // 支持「父文件夹/日期/当期.md」：没有 front matter 时用日期文件夹推日期。
+        final folderDate = _dateFromFolder(file.parent.path);
+        final date = doc.date ?? folderDate ?? stat.modified;
         if (entries.existsSameContent(body, date)) {
           skipped++;
           continue;
@@ -248,6 +250,29 @@ class MarkdownIo {
             );
           }
         }
+        // 「日期文件夹 + 附件」结构：把同目录里没被正文引用的文件也作为附件导入。
+        if (folderDate != null) {
+          final referenced = <String>{
+            for (final blob in storedRefs.values) blob.filename,
+          };
+          final extras = await _importFolderAttachments(
+            entry: entry,
+            file: file,
+            referencedNames: referenced,
+            errors: errors,
+          );
+          if (extras.isNotEmpty) {
+            final buffer = StringBuffer(body.trimRight())
+              ..writeln()
+              ..writeln()
+              ..writeln('## 附件')
+              ..writeln();
+            for (final blob in extras) {
+              buffer.writeln('- [${blob.filename}](${blob.relativeRef})');
+            }
+            entries.saveContent(entry.id, body: buffer.toString());
+          }
+        }
         imported++;
       } catch (error) {
         errors.add('${p.basename(file.path)}: $error');
@@ -256,6 +281,70 @@ class MarkdownIo {
     return ImportResult(imported: imported, skipped: skipped, errors: errors);
   }
 
+  /// 从 `<日期>` 文件夹名解析日期：`2026-11-06`、`2026.11.06`、`2026年11月6日`、`20261106`。
+  static final RegExp _folderDatePattern = RegExp(
+    r'(\d{4})[-_.年](\d{1,2})[-_.月](\d{1,2})日?',
+  );
+
+  static DateTime? _dateFromFolder(String path) {
+    final name = p.basename(path);
+    final match = _folderDatePattern.firstMatch(name);
+    if (match != null) {
+      final year = int.parse(match.group(1)!);
+      final month = int.parse(match.group(2)!);
+      final day = int.parse(match.group(3)!);
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        return DateTime(year, month, day);
+      }
+      return null;
+    }
+    final compact = RegExp(r'^(\d{4})(\d{2})(\d{2})$').firstMatch(name);
+    if (compact != null) {
+      final year = int.parse(compact.group(1)!);
+      final month = int.parse(compact.group(2)!);
+      final day = int.parse(compact.group(3)!);
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        return DateTime(year, month, day);
+      }
+    }
+    return null;
+  }
+
+  /// 把日期文件夹里「正文没引用」的文件导入为附件，返回导入的 blob。
+  Future<List<StoredBlob>> _importFolderAttachments({
+    required Entry entry,
+    required File file,
+    required Set<String> referencedNames,
+    required List<String> errors,
+  }) async {
+    final result = <StoredBlob>[];
+    final folder = Directory(file.parent.path);
+    if (!await folder.exists()) return result;
+    final entities = folder.listSync(followLinks: false);
+    entities.sort((a, b) => a.path.compareTo(b.path));
+    for (final entity in entities) {
+      if (entity is! File) continue;
+      final name = p.basename(entity.path);
+      if (name.toLowerCase().endsWith('.md')) continue;
+      if (referencedNames.contains(name)) continue;
+      try {
+        final blob = await store.storeFile(entity.path);
+        attachments.insert(
+          entryId: entry.id,
+          sha256: blob.sha256,
+          filename: name,
+          mime: mimeForFilename(name),
+          sizeBytes: blob.sizeBytes,
+        );
+        result.add(blob);
+      } on AttachmentTooLargeException catch (error) {
+        errors.add('$name: $error');
+      } on Object catch (error) {
+        errors.add('$name: $error');
+      }
+    }
+    return result;
+  }
   /// 原子写：先写 `.tmp` 再改名，避免导出中途崩溃留下半截 .md。
   static Future<void> _writeAtomic(File file, String content) async {
     final temp = File('${file.path}.tmp');
