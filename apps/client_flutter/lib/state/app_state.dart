@@ -20,6 +20,7 @@ import '../rag/rag_service.dart';
 import '../rag/report_job.dart';
 import '../rag/semantic_indexer.dart';
 import '../rag/soul_job.dart';
+import '../rag/skill_job.dart';
 import '../rag/summarizer.dart';
 import '../data/attachment_repository.dart';
 import '../data/attachment_store.dart';
@@ -132,6 +133,7 @@ class AppState extends ChangeNotifier {
     this.ragEmbedder,
     this.ragSummarizerOverride,
     this.ragAnswererOverride,
+    this.skillDistillerOverride,
     RagSettingsStore? ragSettingsStore,
   }) : _filePicker = filePicker ?? _defaultFilePicker,
        _ragSettingsStore = ragSettingsStore ?? RagSettingsStore(),
@@ -153,6 +155,7 @@ class AppState extends ChangeNotifier {
   final Embedder? ragEmbedder;
   final Summarizer? ragSummarizerOverride;
   final Answerer? ragAnswererOverride;
+  final SkillDistiller? skillDistillerOverride;
   final RagSettingsStore _ragSettingsStore;
   late RagSettings _ragSettings;
 
@@ -953,6 +956,49 @@ class AppState extends ChangeNotifier {
               model: _ragSettings.askModel,
               baseUrl: _ragSettings.baseUrl,
             ));
+
+  // ───────────────────────────── 蒸馏 skill（v2.2） ─────────────────────────────
+
+  bool get skillEnabled => _ragSettings.skillEnabled;
+
+  /// 能否蒸馏：需要云端，或测试里注入了 distiller。
+  bool get canDistill => cloudConfig != null || skillDistillerOverride != null;
+
+  void setSkillEnabled(bool enabled) {
+    updateRagSettings(_ragSettings.copyWith(skillEnabled: enabled));
+  }
+
+  /// 生成一份新的 skill；旧目录不会覆盖。
+  ///
+  /// 需要：开关打开 + 云端模型可用（或在测试里注入 [skillDistillerOverride]）。
+  Future<DistilledSkill> distillSkill() async {
+    if (!skillEnabled) {
+      throw SkillUnavailable('先在「蒸馏」页打开开关');
+    }
+    final distiller = skillDistillerOverride ?? _requireCloudDistiller();
+    var soul = soulJob.read();
+    if (soul == null || soul.trim().isEmpty) {
+      await soulJob.generate(force: true);
+      soul = soulJob.read();
+    }
+    return SkillJob(
+      rag: rag.database,
+      entries: entryRepo,
+      tags: tagRepo,
+      distiller: distiller,
+    ).run(soulMarkdown: soul);
+  }
+
+  SkillDistiller _requireCloudDistiller() {
+    final config = cloudConfig;
+    if (config == null) {
+      throw SkillUnavailable('蒸馏使用云端大模型：请先在设置里开启云端并填 API Key');
+    }
+    return CloudSkillDistiller(config);
+  }
+
+  List<SkillEntry> listSkills() =>
+      SkillJob.listIn(SkillJob.directoryFor(rag.database));
 
   /// 保存云端 API Key（DPAPI 加密后写 settings.json）。
   void setCloudApiKey(String plain) {

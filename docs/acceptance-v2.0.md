@@ -1,7 +1,7 @@
 # v2.0 验收清单
 
 对应 `docs/project.md` 第 3/4 节与 `docs/rag.md`。执行环境：Windows 10/11 x64，
-`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.1.0**（2026-11-06，含 2.1 体验补丁）。
+`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.2.0**（2026-11-06，含 2.2 蒸馏）。
 
 > 状态列：`PASS` / `FAIL`（附现象）/ `BLOCKED`；标「自动」的由 `flutter test` 覆盖。
 > v1.1.1 及更早的验收记录见 git 历史中的 `acceptance-v1.1.md`。
@@ -105,7 +105,20 @@
 | I5 | 重建进度 | 点「重建索引」 | 出现进度条，结束时提示统计 | 人工 |
 | I6 | 自定义模型 | 设置里选「＋ 自定义…」 | 可输入任意模型名并保存 | **自动**：`rag_answer_test`（设置持久化）+ 人工 |
 
-## J. 汇总
+## J. 蒸馏 skill（2.2）
+
+| # | 项 | 操作 | 期望 | 状态 |
+|---|---|---|---|---|
+| J1 | 导航入口 | 首页 ✳ | 打开蒸馏页 | **自动**：`rag_ui_test` |
+| J2 | 开关 | 打开「启用蒸馏」 | 状态写入 `settings.json` | **自动**：`rag_answer_test` |
+| J3 | 生成 | 点「立即蒸馏」（注入假模型） | 生成 `db/skill/<时间>/SKILL.md` + meta | **自动**：`skill_job_test` |
+| J4 | 不覆盖 | 连续生成两次 | 两个目录，旧文件保留 | **自动**：`skill_job_test` |
+| J5 | 同一秒 | 同一时间戳两次 | 第二个目录带 `-2` | **自动**：`skill_job_test` |
+| J6 | 缺灵魂档案 | 删掉 soul.md 后生成 | 先自动生成 soul，再蒸馏 | 人工 |
+| J7 | 没有云端 | 关掉云端开关 | 按钮置灰并提示去设置 | 人工 |
+| J8 | 大小上限 | 超长输出 | 截断到 16 KB 并注明 | **自动**：`skill_job_test` |
+
+## K. 汇总
 
 - 自动化：`flutter analyze` 0 issue、`flutter test` **228 passed**、构建成功、冒烟通过。
 - 交付：`dist/MDiary-2.0.0-windows-x64/`、同名 zip、`SHA256SUMS.txt`。

@@ -275,3 +275,73 @@ class CloudSummarizer implements Summarizer {
     }
   }
 }
+
+/// 通用的云端文本补全（蒸馏 skill 用）：一次请求、返回纯文本。
+class CloudCompleter {
+  CloudCompleter(this.config, {this.temperature = 0.4, this.timeout = const Duration(minutes: 5)});
+
+  final CloudConfig config;
+  final double temperature;
+  final Duration timeout;
+
+  String get modelId => 'cloud:${config.model}';
+
+  Future<bool> isAvailable() async {
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+    try {
+      final request = await client.getUrl(config.modelsUri);
+      config.headers.forEach(request.headers.set);
+      final response = await request.close();
+      await response.drain<void>();
+      return response.statusCode == 200;
+    } on Object {
+      return false;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<String> complete(String prompt, {int maxTokens = 1500}) async {
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
+    try {
+      final request = await client.postUrl(config.chatUri);
+      config.headers.forEach(request.headers.set);
+      request.headers.contentType = ContentType(
+        'application',
+        'json',
+        charset: 'utf-8',
+      );
+      request.write(
+        jsonEncode(<String, Object>{
+          'model': config.model,
+          'stream': false,
+          'temperature': temperature,
+          'max_tokens': maxTokens,
+          'messages': <Map<String, String>>[
+            <String, String>{'role': 'user', 'content': prompt},
+          ],
+        }),
+      );
+      final response = await request.close().timeout(timeout);
+      final body = await response.transform(utf8.decoder).join();
+      if (response.statusCode != 200) {
+        throw CloudUnavailable(CloudAnswerer._httpError(response.statusCode, body));
+      }
+      final decoded = jsonDecode(body);
+      final choices = decoded is Map ? decoded['choices'] : null;
+      if (choices is! List || choices.isEmpty) {
+        throw CloudUnavailable('云端响应里没有 choices');
+      }
+      final message = choices.first is Map
+          ? (choices.first as Map)['message']
+          : null;
+      final content = message is Map ? '${message['content'] ?? ''}' : '';
+      if (content.trim().isEmpty) throw CloudUnavailable('云端返回了空内容');
+      return content;
+    } on SocketException catch (error) {
+      throw CloudUnavailable('连不上云端服务：${error.message}');
+    } finally {
+      client.close(force: true);
+    }
+  }
+}

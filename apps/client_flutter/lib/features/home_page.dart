@@ -11,6 +11,7 @@ import '../ui/month_calendar.dart';
 import '../ui/widgets.dart';
 import 'entry_editor_page.dart';
 import 'rag_page.dart';
+import 'skill_page.dart';
 import 'settings_page.dart';
 import 'star_map/star_map_page.dart';
 import 'trash_page.dart';
@@ -198,6 +199,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                 ),
+              ),
+              _HeaderIconButton(
+                tooltip: '蒸馏（skill）',
+                onPressed: () => _openPage(const SkillPage()),
+                icon: const Icon(Icons.auto_fix_high),
               ),
               _HeaderIconButton(
                 tooltip: 'RAG（问答 / 日报 / 档案）',
@@ -592,7 +598,7 @@ class _StatusBar extends StatelessWidget {
           ),
           const SizedBox(width: 14),
           Text(
-            'v2.1.0',
+            'v2.2.0',
             style: theme.textTheme.labelSmall?.copyWith(
               color: scheme.onSurfaceVariant,
             ),

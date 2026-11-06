@@ -177,6 +177,15 @@
 5. **隐私**：默认不出网；切到云端 embedding/LLM 时二次确认；日志不记录正文。
 6. **评测**：用 30–50 条真实日记做问答集，量 recall@5 与引用准确率，再决定换更大模型或加 rerank。
 
+### 7.8 蒸馏 skill（v2.2）
+
+- 入口：导航栏 ✳（独立页面），页面开关「启用蒸馏」（`settings.json` 的 `skill_enabled`）；
+- 输入：`rag/soul.md` + 最近 80 篇的 `entry_summary`（无摘要用正文首行）+ 标签统计；
+- 处理：**云端大模型**（OpenAI 兼容）按六段固定结构蒸馏；
+- 产物：`<库目录>/db/skill/<YYYYMMDD-HHmmss>/SKILL.md` + `meta.json`，**每次新目录、不覆盖**；
+- 前置：设置里开启云端模型并填 API Key；没有 soul.md 时先自动生成；
+- 细节见 `docs/skill.md`。
+
 ### 7.7 语义管理 / 日报 / soul.md / RAG 界面（v2.0）
 
 > **2.0.1 已完成**：`lib/rag/`（切片 / embedding / 索引 / 混合检索）+ `tool/rag_search.dart` 命令行，
@@ -336,7 +345,14 @@ RAG 的产物统一放 `<库目录>/rag/`：索引可重建；`reports/` 与 `so
 - 问答页显示索引切片数/向量模型/更新时间，重建索引有进度条；
 - 模型下拉支持「＋ 自定义…」输入未检测到的模型名。
 
-### 10.6 后续开发起点
+### 10.6 v2.2 蒸馏 skill（2026-11-06）
+
+- 导航栏 ✳ 独立页面 + 开关；云端大模型蒸馏 soul.md + RAG 语料；
+- 产物 `db/skill/<时间>/SKILL.md` + `meta.json`，永不覆盖；
+- 新增 `lib/rag/skill_job.dart`、`lib/features/skill_page.dart`、`docs/skill.md`；
+- 测试 236 passed（新增 8）。
+
+### 10.7 后续开发起点
 
 - **v1.1（打磨）**：先做 backlog A 组（单实例、`ShellExecuteW`、导出幽灵条目、导入大小上限）+ B 组体验项。
 - **v2.0（RAG，本地优先）**：按 §7.6 的路线做切片 + 本地 embedding + sqlite-vec；再看 §7.7 的

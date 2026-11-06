@@ -18,6 +18,7 @@ import 'package:mdiary/data/tag_repository.dart';
 import 'package:mdiary/features/rag_page.dart';
 import 'package:mdiary/rag/answer.dart';
 import 'package:mdiary/rag/embedder.dart';
+import 'package:mdiary/rag/skill_job.dart';
 import 'package:mdiary/rag/summarizer.dart';
 import 'package:mdiary/state/app_state.dart';
 import 'package:path/path.dart' as p;
@@ -70,6 +71,7 @@ void main() {
       ragEmbedder: HashingEmbedder(dimension: 64),
       ragSummarizerOverride: FakeSummarizer(),
       ragAnswererOverride: FakeAnswerer(),
+      skillDistillerOverride: FakeSkillDistiller(),
     );
     await state.bootstrap();
   });
@@ -158,6 +160,36 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, '新对话'));
     await tester.pumpAndSettle();
     expect(find.textContaining('根据记录'), findsNothing, reason: '新对话应清空回答');
+  }, skip: skip);
+
+  testWidgets('蒸馏页：开关 + 立即蒸馏 + 列表', (tester) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await seed();
+    await tester.pumpWidget(MDiaryApp(state: state));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('蒸馏（skill）'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('启用蒸馏'), findsOneWidget);
+    await tester.tap(find.text('启用蒸馏'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, '立即蒸馏'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('SKILL.md'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(ListView),
+        matching: find.byType(ListTile),
+      ),
+      findsWidgets,
+      reason: '生成后应出现在列表里',
+    );
   }, skip: skip);
 
   testWidgets('日报页：补全后能看到日报并渲染内容', (tester) async {

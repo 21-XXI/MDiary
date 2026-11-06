@@ -14,6 +14,7 @@ import 'package:mdiary/data/tag_repository.dart';
 import 'package:mdiary/rag/answer.dart';
 import 'package:mdiary/rag/rag_service.dart';
 import 'package:mdiary/rag/rag_settings.dart';
+import 'package:mdiary/rag/skill_job.dart';
 import 'package:mdiary/rag/summarizer.dart';
 import 'package:mdiary/state/app_state.dart';
 import 'package:path/path.dart' as p;
@@ -54,6 +55,7 @@ void main() {
       ragSettingsStore: RagSettingsStore(path: settingsFile.path),
       ragAnswererOverride: FakeAnswerer(),
       ragSummarizerOverride: FakeSummarizer(),
+      skillDistillerOverride: FakeSkillDistiller(),
     );
     await state.bootstrap();
   });
@@ -179,6 +181,22 @@ void main() {
     expect(prompt, contains('[日期-标题]'));
     expect(prompt, contains('2026-11-01-杭州出差'));
     expect(prompt, contains('去了西湖'));
+  });
+
+  test('蒸馏开关持久化，生成后写到 db/skill/', () async {
+    expect(state.skillEnabled, isFalse);
+    state.setSkillEnabled(true);
+    expect(RagSettingsStore(path: settingsFile.path).load().skillEnabled, isTrue);
+
+    final skill = await state.distillSkill();
+    expect(File(skill.file).existsSync(), isTrue);
+    expect(state.listSkills(), hasLength(1));
+
+    state.setSkillEnabled(false);
+    await expectLater(
+      state.distillSkill(),
+      throwsA(isA<SkillUnavailable>()),
+    );
   });
 
   test('Fake 回答在没有任何来源时给出兜底话术', () async {

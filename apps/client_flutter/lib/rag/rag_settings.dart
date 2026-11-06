@@ -14,6 +14,7 @@ class RagSettings {
     this.cloudBaseUrl = defaultCloudBaseUrl,
     this.cloudModel = defaultCloudModel,
     this.cloudApiKeyCipher = '',
+    this.skillEnabled = false,
   });
 
   static const String defaultAskModel = 'qwen3:8b';
@@ -47,6 +48,9 @@ class RagSettings {
   /// DPAPI 加密后的 API Key（`dpapi:` / `b64:` 前缀）。
   final String cloudApiKeyCipher;
 
+  /// 是否启用「蒸馏成 skill」功能（v2.2）。
+  final bool skillEnabled;
+
   bool get hasCloudKey => cloudApiKeyCipher.isNotEmpty;
 
   RagSettings copyWith({
@@ -58,6 +62,7 @@ class RagSettings {
     String? cloudBaseUrl,
     String? cloudModel,
     String? cloudApiKeyCipher,
+    bool? skillEnabled,
   }) => RagSettings(
     askModel: askModel ?? this.askModel,
     generateModel: generateModel ?? this.generateModel,
@@ -67,6 +72,7 @@ class RagSettings {
     cloudBaseUrl: cloudBaseUrl ?? this.cloudBaseUrl,
     cloudModel: cloudModel ?? this.cloudModel,
     cloudApiKeyCipher: cloudApiKeyCipher ?? this.cloudApiKeyCipher,
+    skillEnabled: skillEnabled ?? this.skillEnabled,
   );
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -78,6 +84,7 @@ class RagSettings {
     'cloud_base_url': cloudBaseUrl,
     'cloud_model': cloudModel,
     'cloud_api_key': cloudApiKeyCipher,
+    'skill_enabled': skillEnabled,
   };
 
   factory RagSettings.fromJson(Map<String, Object?> json) => RagSettings(
@@ -91,6 +98,7 @@ class RagSettings {
     cloudApiKeyCipher: json['cloud_api_key'] is String
         ? json['cloud_api_key']! as String
         : '',
+    skillEnabled: json['skill_enabled'] == true,
   );
 
   static String _string(Object? value, String fallback) {
