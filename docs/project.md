@@ -128,7 +128,10 @@
 
 ### 7.4 Git 与审查规范
 - 分支：`main` 受保护；特性分支 `feat/xxx`、`fix/xxx`；提交信息走 Conventional Commits。
-- 每次提交必须先 `git add -p` / `git diff --staged` 自审，审查意见写入提交正文（模板：改动 / 原因 / 风险 / 验证方式 / 回滚），必要时在 `docs/reviews/YYYYMMDD-<topic>.md` 存档。
+- 每次提交必须先 `git add -p` / `git diff --staged` 自审，审查意见写入提交正文（模板：改动 / 原因 / 风险 / 验证方式 / 回滚）。
+- **每个功能提交或发布提交，都必须同时补一份 `docs/reviews/YYYYMMDD-<topic>.md`**：
+  至少包含范围、改动、发现的问题、风险与遗留、验证数据、回滚方式；纯文档提交可省略，
+  但改代码/打包/改配置必须写。
 - 提交模板放 `.gitmessage`，`git config commit.template .gitmessage` 生效。
 
 ### 7.5 后端与同步（v3.0，本期仅预留字段）
