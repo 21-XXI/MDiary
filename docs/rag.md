@@ -198,8 +198,12 @@ powershell -ExecutionPolicy Bypass -File scripts\bench-ollama.ps1 -Model qwen3:4
 powershell -ExecutionPolicy Bypass -File scripts\bench-ollama.ps1 -SkipEmbed
 ```
 
-前提：`ollama` 已安装且在运行（脚本会在服务未起时尝试 `ollama serve`）。
-模型默认 `qwen3:8b`（约 5.2 GB）与 `bge-m3`（约 1.2 GB），首次会下载。
+前提：`ollama` 已安装且在运行（脚本会在服务未起时尝试 `ollama serve`；找不到 `ollama`
+时可用环境变量 `OLLAMA_BIN` 指定）。模型默认 `qwen3:8b`（约 5.2 GB）与 `bge-m3`（约 1.2 GB），首次会下载。
+
+**这台机器的实测结果**见 [`docs/bench-ollama.md`](bench-ollama.md)：
+qwen3:8b 约 10.5 tok/s、TTFT 0.8 s，30% CPU / 70% GPU 混合推理；bge-m3 100% GPU，
+300 字切片约 5.5 条/秒。
 
 ## 13. RAG 界面（2.0.7）
 

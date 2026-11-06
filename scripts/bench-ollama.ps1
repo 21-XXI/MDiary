@@ -17,6 +17,11 @@ param(
 $ErrorActionPreference = 'Stop'
 $baseUrl = 'http://127.0.0.1:11434'
 
+$ollama = if ($env:OLLAMA_BIN) { $env:OLLAMA_BIN }
+elseif (Get-Command ollama -ErrorAction SilentlyContinue) { (Get-Command ollama).Source }
+else { Join-Path $env:LOCALAPPDATA 'Programs\Ollama\ollama.exe' }
+if (-not (Test-Path $ollama)) { throw "找不到 ollama.exe（可用 OLLAMA_BIN 指定）：$ollama" }
+
 function Get-OllamaModels {
     try {
         $tags = Invoke-RestMethod -Uri "$baseUrl/api/tags" -TimeoutSec 5
@@ -40,7 +45,7 @@ function Ensure-Model([string]$name) {
     $match = $models | Where-Object { $_ -eq $name -or $_ -like "$name*" }
     if ($match) { return $true }
     Write-Host "==> 拉取模型 $name（首次会比较久）" -ForegroundColor Cyan
-    & ollama pull $name
+    & $ollama pull $name
     return $LASTEXITCODE -eq 0
 }
 
@@ -130,12 +135,12 @@ $gpu = & nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,no
 Write-Host "    CPU: $cpu"
 Write-Host "    RAM: $ram GB"
 Write-Host "    GPU: $gpu"
-$ollamaVersion = (& ollama --version 2>&1 | Out-String).Trim()
+$ollamaVersion = (& $ollama --version 2>&1 | Out-String).Trim()
 Write-Host "    Ollama: $ollamaVersion"
 
 if (-not (Wait-Ollama 30)) {
     Write-Host "==> Ollama 没在运行，尝试启动 serve" -ForegroundColor Yellow
-    Start-Process -FilePath 'ollama' -ArgumentList 'serve' -WindowStyle Hidden | Out-Null
+    Start-Process -FilePath $ollama -ArgumentList 'serve' -WindowStyle Hidden | Out-Null
     if (-not (Wait-Ollama 60)) { throw 'Ollama 服务启动失败' }
 }
 
@@ -146,7 +151,7 @@ Write-Host "==> 预热与加载" -ForegroundColor Cyan
 $warmup = Invoke-Chat '用一句话介绍你自己。' $Model
 Write-Host ("    首次调用：{0}s（其中加载 {1}s），{2} tok/s" -f $warmup.wall_s, $warmup.load_s, $warmup.tok_per_s)
 
-$ps = (& ollama ps 2>&1 | Out-String).Trim()
+$ps = (& $ollama ps 2>&1 | Out-String).Trim()
 Write-Host "    ollama ps:"
 $ps -split "`n" | ForEach-Object { Write-Host "      $_" }
 
@@ -192,6 +197,8 @@ if (-not $SkipEmbed -and (Ensure-Model $EmbedModel)) {
         '体检报告出来了，指标都正常。',
         '车票订好了，周五出发。'
     )
+    # 先预热一次（首次会包含模型加载，不能算进吞吐）
+    Invoke-Embed $EmbedModel @('预热') | Out-Null
     $embed = Invoke-Embed $EmbedModel $texts
     Write-Host ("    {0} 条 / {1}s · {2} 条/s · 维度 {3}" -f $embed.count, $embed.total_s, $embed.texts_s, $embed.dim)
 }
