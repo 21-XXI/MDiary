@@ -107,6 +107,7 @@ dart run tool/rag_search.dart --root <库目录> "发票" --json --k 5
 | `lib/rag/soul_job.dart` | 灵魂档案：统计汇总、模型概括、8 KB 预算、版本备份 |
 | `tool/rag_report.dart` | 日报命令行 |
 | `tool/rag_soul.dart` | 灵魂档案命令行 |
+| `scripts/bench-ollama.ps1` | 本地模型性能测量 |
 
 ## 9. 每日语义管理（2.0.4）
 
@@ -183,7 +184,22 @@ dart run tool/rag_soul.dart --root <库目录> --show    # 只看现有内容
 
 `get_soul`（MCP 工具）直接返回这个文件；也可以把它贴进任意大模型的 system prompt。
 
-## 12. 已知限制（2.0.1 / 2.0.4 / 2.0.5 / 2.0.6）
+## 12. 本地模型测量（bench-ollama.ps1）
+
+`scripts/bench-ollama.ps1` 会：探测 Ollama → 按需拉模型 → 预热（记录加载耗时）→
+跑 3 组中文任务的推理基准（tok/s、总耗时、输出 token）→ 测流式首 token（TTFT）→
+测 `bge-m3` embedding 吞吐，最后把结果写到 `bench-ollama.json`。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\bench-ollama.ps1
+powershell -ExecutionPolicy Bypass -File scripts\bench-ollama.ps1 -Model qwen3:4b -Runs 5
+powershell -ExecutionPolicy Bypass -File scripts\bench-ollama.ps1 -SkipEmbed
+```
+
+前提：`ollama` 已安装且在运行（脚本会在服务未起时尝试 `ollama serve`）。
+模型默认 `qwen3:8b`（约 5.2 GB）与 `bge-m3`（约 1.2 GB），首次会下载。
+
+## 13. 已知限制（2.0.1 / 2.0.4 / 2.0.5 / 2.0.6）
 
 - 向量检索是暴力扫描，单库 > 5 万切片会变慢；
 - PDF / 图片只索引元数据，不抽正文；

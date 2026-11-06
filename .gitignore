@@ -1,4 +1,4 @@
-﻿# Flutter / Dart
+# Flutter / Dart
 .dart_tool/
 .packages
 .pub-cache/
@@ -33,3 +33,6 @@ Thumbs.db
 
 # Editors
 .vscode/settings.json
+
+# 基准测试原始结果（测量数据写入 docs）
+bench-ollama.json
