@@ -20,11 +20,13 @@ class AppTheme {
     'Menlo',
   ];
 
-  static ThemeData light() => _build(Brightness.light);
+  static ThemeData light({String? fontFamily}) =>
+      _build(Brightness.light, fontFamily);
 
-  static ThemeData dark() => _build(Brightness.dark);
+  static ThemeData dark({String? fontFamily}) =>
+      _build(Brightness.dark, fontFamily);
 
-  static ThemeData _build(Brightness brightness) {
+  static ThemeData _build(Brightness brightness, String? fontFamily) {
     final scheme = ColorScheme.fromSeed(
       seedColor: seed,
       brightness: brightness,
@@ -36,7 +38,10 @@ class AppTheme {
     );
     return base.copyWith(
       scaffoldBackgroundColor: scheme.surface,
-      textTheme: base.textTheme.apply(fontFamilyFallback: uiFontFallback),
+      textTheme: base.textTheme.apply(
+        fontFamily: fontFamily,
+        fontFamilyFallback: uiFontFallback,
+      ),
       dividerTheme: DividerThemeData(
         color: scheme.outlineVariant.withValues(alpha: 0.5),
         thickness: 1,
@@ -49,9 +54,13 @@ class AppTheme {
   }
 
   /// 编辑器正文样式（等宽，便于对齐 Markdown 结构）。
-  static TextStyle editorStyle(double fontSize, Color color) {
+  static TextStyle editorStyle(
+    double fontSize,
+    Color color, {
+    String? fontFamily,
+  }) {
     return TextStyle(
-      fontFamily: 'Cascadia Mono',
+      fontFamily: fontFamily ?? 'Cascadia Mono',
       fontFamilyFallback: monoFontFallback,
       fontSize: fontSize,
       height: 1.6,

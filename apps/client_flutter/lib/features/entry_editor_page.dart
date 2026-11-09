@@ -6,6 +6,7 @@ import '../core/theme.dart';
 import '../data/models.dart';
 import '../state/app_state.dart';
 import '../ui/markdown_view.dart';
+import '../ui/symbol_palette.dart';
 
 enum EditorMode { edit, split, preview }
 
@@ -336,6 +337,11 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     IconButton(
+                      tooltip: '符号与公式',
+                      onPressed: () => showSymbolPalette(context, _bodyController),
+                      icon: const Icon(Icons.functions),
+                    ),
+                    IconButton(
                       tooltip: '插入附件（≤ 100 MB）',
                       onPressed: _busy ? null : _insertAttachment,
                       icon: const Icon(Icons.attach_file),
@@ -437,6 +443,7 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
           style: AppTheme.editorStyle(
             _state.editorFontSize,
             theme.colorScheme.onSurface,
+            fontFamily: _state.editorFont,
           ),
           decoration: const InputDecoration(
             border: InputBorder.none,

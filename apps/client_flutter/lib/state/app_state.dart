@@ -213,6 +213,8 @@ class AppState extends ChangeNotifier {
   Map<String, List<String>> _tagsByEntry = const <String, List<String>>{};
   ThemeMode _themeMode = ThemeMode.system;
   double _editorFontSize = 16;
+  String _uiFont = '';
+  String _editorFont = 'Cascadia Mono';
 
   DateTime _selectedDate = DateTime.now();
   DateTime _calendarMonth = DateTime(
@@ -295,6 +297,12 @@ class AppState extends ChangeNotifier {
   ThemeMode get themeMode => _themeMode;
   double get editorFontSize => _editorFontSize;
 
+  /// 界面字体（空 = 系统默认回落链）。
+  String get uiFont => _uiFont;
+
+  /// 编辑器等宽字体。
+  String get editorFont => _editorFont;
+
   /// 日历当前选中的那天。
   DateTime get selectedDate => _selectedDate;
 
@@ -370,6 +378,8 @@ class AppState extends ChangeNotifier {
     };
     _editorFontSize = ((metaRepo.getInt('editor_font_size') ?? 16).toDouble())
         .clamp(12, 28);
+    _uiFont = metaRepo.get('ui_font') ?? '';
+    _editorFont = metaRepo.get('editor_font') ?? 'Cascadia Mono';
     _recentQueries = _readRecentQueries();
     _loading = false;
     await refresh();
@@ -1402,6 +1412,18 @@ class AppState extends ChangeNotifier {
       ThemeMode.dark => 'dark',
       ThemeMode.system => 'system',
     });
+    notifyListeners();
+  }
+
+  void setUiFont(String font) {
+    _uiFont = font.trim();
+    metaRepo.set('ui_font', _uiFont);
+    notifyListeners();
+  }
+
+  void setEditorFont(String font) {
+    _editorFont = font.trim().isEmpty ? 'Cascadia Mono' : font.trim();
+    metaRepo.set('editor_font', _editorFont);
     notifyListeners();
   }
 

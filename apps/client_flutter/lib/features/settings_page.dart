@@ -83,6 +83,75 @@ class SettingsPage extends StatelessWidget {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  const Divider(height: 20),
+                  Row(
+                    children: <Widget>[
+                      const SizedBox(
+                        width: 96,
+                        child: Text('界面字体'),
+                      ),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          key: ValueKey('ui-font-${state.uiFont}'),
+                          initialValue: state.uiFont,
+                          isDense: true,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            border: OutlineInputBorder(),
+                          ),
+                          items: <DropdownMenuItem<String>>[
+                            for (final entry in _uiFonts.entries)
+                              DropdownMenuItem<String>(
+                                value: entry.key,
+                                child: Text(entry.value),
+                              ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) state.setUiFont(value);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: <Widget>[
+                      const SizedBox(
+                        width: 96,
+                        child: Text('编辑器字体'),
+                      ),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          key: ValueKey('editor-font-${state.editorFont}'),
+                          initialValue: _editorFonts.containsKey(state.editorFont)
+                              ? state.editorFont
+                              : _editorFonts.keys.first,
+                          isDense: true,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            border: OutlineInputBorder(),
+                          ),
+                          items: <DropdownMenuItem<String>>[
+                            for (final entry in _editorFonts.entries)
+                              DropdownMenuItem<String>(
+                                value: entry.key,
+                                child: Text(entry.value),
+                              ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) state.setEditorFont(value);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '字体取自系统已安装的字体，不会增加安装包体积；换了浏览器/机器没装该字体会回落到默认字体。',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -342,7 +411,7 @@ class SettingsPage extends StatelessWidget {
           Card(
             child: ListTile(
               leading: const Icon(Icons.info_outline),
-              title: const Text('MDiary v2.4.0'),
+              title: const Text('MDiary v2.5.0'),
               subtitle: Text(
                 'Markdown 日记 · 本地 SQLite 存储 · 附件内容寻址\n'
                 '运行于 ${Platform.operatingSystem} ${Platform.version.split(' ').first}',
@@ -1154,3 +1223,18 @@ class _RagModelsCardState extends State<_RagModelsCard> {
     );
   }
 }
+const Map<String, String> _uiFonts = <String, String>{
+  '': '默认（系统回落）',
+  'Microsoft YaHei UI': '微软雅黑 UI',
+  'Microsoft YaHei': '微软雅黑',
+  'Segoe UI': 'Segoe UI',
+  'SimSun': '宋体',
+  'Noto Sans CJK SC': '思源黑体',
+};
+
+const Map<String, String> _editorFonts = <String, String>{
+  'Cascadia Mono': 'Cascadia Mono',
+  'Consolas': 'Consolas',
+  'Courier New': 'Courier New',
+  'Microsoft YaHei UI': '微软雅黑（非等宽）',
+};

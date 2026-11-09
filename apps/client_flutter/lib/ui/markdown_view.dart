@@ -1,7 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:markdown/markdown.dart' as md;
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+
+import 'markdown_extras.dart';
 
 /// Markdown 预览。附件图片走本地内容寻址库；找不到时给出可见的占位提示，
 /// 而不是静默空白（对应验收 D2/E1）。
@@ -45,57 +48,82 @@ class MarkdownView extends StatelessWidget {
         ),
       );
     }
+    final segments = splitMarkdownSegments(data);
+    if (segments.length == 1 && segments.first.text != null) {
+      return Padding(
+        padding: padding,
+        child: _markdownBody(context, segments.first.text!),
+      );
+    }
     return Padding(
       padding: padding,
-      child: MarkdownBody(
-        data: data,
-        selectable: true,
-        styleSheet: _buildStyleSheet(context),
-        imageBuilder: (uri, title, alt) {
-          final reference = uri.toString();
-          final path = resolveLocalPath(reference);
-          final name = _attachmentName(reference, alt);
-          final open = onOpenLink == null ? null : () => onOpenLink!(reference);
-          if (path == null) {
-            return _AttachmentChip(
-              label: '附件缺失：$name',
-              missing: true,
-              onTap: open,
-            );
-          }
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                GestureDetector(
-                  onTap: open,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: Image.file(
-                      File(path),
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stack) => _AttachmentChip(
-                        label: '附件缺失：$name',
-                        missing: true,
-                        onTap: open,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                _AttachmentChip(label: name, missing: false, onTap: open),
-              ],
-            ),
-          );
-        },
-        onTapLink: (text, href, title) {
-          if (href != null && onOpenLink != null) onOpenLink!(href);
-        },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          for (final segment in segments)
+            if (segment.text != null)
+              _markdownBody(context, segment.text!)
+            else if (segment.math != null)
+              MathBlockView(tex: segment.math!)
+            else if (segment.mermaid != null)
+              MermaidCard(source: segment.mermaid!),
+        ],
       ),
     );
   }
 
+  Widget _markdownBody(BuildContext context, String markdown) {
+    return MarkdownBody(
+      data: markdown,
+      selectable: true,
+      styleSheet: _buildStyleSheet(context),
+      inlineSyntaxes: <md.InlineSyntax>[MathInlineSyntax()],
+      builders: <String, MarkdownElementBuilder>{
+        'mathinline': MathInlineBuilder(),
+      },
+      imageBuilder: (uri, title, alt) {
+        final reference = uri.toString();
+        final path = resolveLocalPath(reference);
+        final name = _attachmentName(reference, alt);
+        final open = onOpenLink == null ? null : () => onOpenLink!(reference);
+        if (path == null) {
+          return _AttachmentChip(
+            label: '附件缺失：$name',
+            missing: true,
+            onTap: open,
+          );
+        }
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              GestureDetector(
+                onTap: open,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: Image.file(
+                    File(path),
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stack) => _AttachmentChip(
+                      label: '附件缺失：$name',
+                      missing: true,
+                      onTap: open,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              _AttachmentChip(label: name, missing: false, onTap: open),
+            ],
+          ),
+        );
+      },
+      onTapLink: (text, href, title) {
+        if (href != null && onOpenLink != null) onOpenLink!(href);
+      },
+    );
+  }
   String _attachmentName(String reference, String? alt) {
     final fromAlt = (alt ?? '').trim();
     if (fromAlt.isNotEmpty && fromAlt != reference) return fromAlt;

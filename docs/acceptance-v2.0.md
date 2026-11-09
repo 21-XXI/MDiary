@@ -1,7 +1,7 @@
 # v2.3 验收清单
 
 对应 `docs/project.md` 第 3/4 节与 `docs/rag.md`。执行环境：Windows 10/11 x64，
-`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.4.0**（2026-11-09，含 2.4 对话问答）。
+`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.5.0**（2026-11-09，含 2.5 Markdown 书写增强）。
 
 > 状态列：`PASS` / `FAIL`（附现象）/ `BLOCKED`；标「自动」的由 `flutter test` 覆盖。
 > v1.1.1 及更早的验收记录见 git 历史中的 `acceptance-v1.1.md`。
@@ -11,10 +11,10 @@
 | # | 项 | 命令 | 期望 | 状态 |
 |---|---|---|---|---|
 | A1 | 静态分析 | `flutter analyze` | 0 issue | **PASS**（2026-11-06，0 issue） |
-| A2 | 单元/界面测试 | `flutter test` | 全绿 | **PASS**（244 passed） |
+| A2 | 单元/界面测试 | `flutter test` | 全绿 | **PASS**（251 passed） |
 | A3 | Release 构建 | `scripts\build.ps1` | 产出 exe | **PASS**（Release 目录 21.9 MB） |
 | A4 | 冒烟 | `scripts\smoke.ps1` | 启动建库 + 单实例 | **PASS**（verify.ps1 自动执行） |
-| A5 | 交付校验 | `SHA256SUMS.txt` | 与 zip 一致 | **PASS**（`MDiary-2.4.0-windows-x64.zip`） |
+| A5 | 交付校验 | `SHA256SUMS.txt` | 与 zip 一致 | **PASS**（`MDiary-2.5.0-windows-x64.zip`） |
 
 ## B. 书写 / 存储（v1.1.1 能力回归）
 
@@ -150,9 +150,21 @@
 | M6 | 新对话 | 点「新对话」 | 消息与上下文清空 | **自动**：`rag_ui_test` |
 | M7 | 停止 | 生成中点「停止」 | 立即停止，保留已生成内容 | 人工 |
 
-## N. 汇总
+## N. v2.5 Markdown 书写增强
 
-- 自动化：`flutter analyze` 0 issue、`flutter test` **244 passed**、构建成功、冒烟通过。
-- 交付：`dist/MDiary-2.4.0-windows-x64/`、同名 zip、`SHA256SUMS.txt`。
+| # | 项 | 操作 | 期望 | 状态 |
+|---|---|---|---|---|
+| N1 | 行内公式 | `$E=mc^2$` | 预览渲染为公式，与文字同行 | **自动**：`markdown_extras_test` |
+| N2 | 块级公式 | `$$ ... $$` | 居中、可横向滚动，失败有回退 | **自动**：`markdown_extras_test` |
+| N3 | Mermaid 卡片 | ` ```mermaid ` 围栏 | 显示源码卡片与复制按钮 | **自动**：`markdown_extras_test` |
+| N4 | 符号提示表 | 工具栏「符号与公式」 | 六组符号，点一下插入 | **自动**：`symbol_palette_test` |
+| N5 | 选区包裹 | 选中文字点粗体 | `**文字**` | **自动**：`symbol_palette_test` |
+| N6 | 界面字体 | 设置 → 外观 | 立即变化并持久 | 人工 |
+| N7 | 编辑器字体 | 设置 → 外观 | 编辑区立即变化并持久 | 人工 |
+
+## O. 汇总
+
+- 自动化：`flutter analyze` 0 issue、`flutter test` **251 passed**、构建成功、冒烟通过。
+- 交付：`dist/MDiary-2.5.0-windows-x64/`、同名 zip、`SHA256SUMS.txt`。
 - 待人工确认：B3、G1（真机点击）、H7、H10。
 - 已知限制：问答无多轮记忆；embedding 仅本地；模型质量取决于本机模型。

@@ -17,11 +17,12 @@ class MDiaryApp extends StatelessWidget {
       child: ListenableBuilder(
         listenable: state,
         builder: (context, _) {
+          final fontFamily = state.uiFont.isEmpty ? null : state.uiFont;
           return MaterialApp(
             title: 'MDiary',
             debugShowCheckedModeBanner: false,
-            theme: AppTheme.light(),
-            darkTheme: AppTheme.dark(),
+            theme: AppTheme.light(fontFamily: fontFamily),
+            darkTheme: AppTheme.dark(fontFamily: fontFamily),
             themeMode: state.themeMode,
             home: const HomePage(),
           );
