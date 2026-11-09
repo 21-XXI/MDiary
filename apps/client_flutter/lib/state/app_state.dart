@@ -13,6 +13,7 @@ import '../core/ids.dart';
 import '../core/system_open.dart';
 import '../core/secret_store.dart';
 import '../rag/answer.dart';
+import '../rag/chat.dart';
 import '../rag/cloud_client.dart';
 import '../rag/embedder.dart';
 import '../rag/rag_settings.dart';
@@ -1019,6 +1020,15 @@ class AppState extends ChangeNotifier {
     if (await answerer.isAvailable()) return null;
     return '连不上 ${config.baseUrl} 或 Key 无效';
   }
+
+  /// 对话模式：模型先改写检索词 → 混合检索 → 带引用回答。
+  Future<ChatReply> chatAsk(
+    String question, {
+    List<AnswerTurn> history = const <AnswerTurn>[],
+  }) => RagChat(
+    search: (query, k) => ragSearch(query, k: k),
+    answerer: ragAnswerer,
+  ).ask(question: question, history: history);
 
   /// 用当前命中的来源生成回答（流式，可带最近的对话上下文）。
   Stream<String> streamAnswer(

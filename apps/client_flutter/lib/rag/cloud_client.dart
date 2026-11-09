@@ -72,6 +72,10 @@ class CloudAnswerer implements Answerer {
   }
 
   @override
+  Future<String> complete(String prompt) async =>
+      CloudCompleter(config).complete(prompt, maxTokens: 160);
+
+  @override
   Stream<String> streamAnswer({
     required String question,
     required List<AnswerSource> sources,

@@ -365,7 +365,14 @@ RAG 的产物统一放 `<库目录>/rag/`：索引可重建；`reports/` 与 `so
 - 新增 `docs/agent-integration.md`：静态 skill / 蒸馏 skill / CLI / MCP 路线；
 - 已把 `diary-segmenter` 实际装进本机 DSH，catalog 立即可见。
 
-### 10.9 后续开发起点
+### 10.9 v2.4 对话问答（2026-11-06）
+
+- 问答页从「先检索再点生成」改为直接对话：发送即先检索、再流式回答；
+- 多轮上下文保留最近 6 轮；追问时交互模型先改写 1–3 条检索词，合并去重后检索；
+- 回答气泡下显示来源（点击回原文），并显示本轮检索词；
+- 新增 `lib/rag/chat.dart`、`Answerer.complete`、`test/rag_chat_test.dart`；测试 244 passed。
+
+### 10.10 后续开发起点
 
 - **v1.1（打磨）**：先做 backlog A 组（单实例、`ShellExecuteW`、导出幽灵条目、导入大小上限）+ B 组体验项。
 - **v2.x（RAG，本地优先）**：v2.0 索引/问答/日报/soul/界面/云端，v2.1 多轮追问与索引状态，

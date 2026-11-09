@@ -51,6 +51,9 @@ abstract class Answerer {
     required List<AnswerSource> sources,
     List<AnswerTurn> history = const <AnswerTurn>[],
   });
+
+  /// 非流式补全：用于把追问改写成检索词（对话模式）。
+  Future<String> complete(String prompt);
 }
 
 /// 本地 Ollama 的流式问答。
@@ -155,6 +158,45 @@ class OllamaAnswerer implements Answerer {
     }
   }
 
+  @override
+  Future<String> complete(String prompt) async {
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+    try {
+      for (final withThink in <bool>[false, true]) {
+        final request = await client.postUrl(Uri.parse('$baseUrl/api/chat'));
+        request.headers.contentType = ContentType.json;
+        request.write(
+          jsonEncode(<String, Object>{
+            'model': model,
+            'stream': false,
+            if (!withThink) 'think': false,
+            'options': <String, Object>{'temperature': 0.2, 'num_predict': 160},
+            'messages': <Map<String, String>>[
+              <String, String>{'role': 'user', 'content': prompt},
+            ],
+          }),
+        );
+        final response = await request.close().timeout(timeout);
+        final body = await response.transform(utf8.decoder).join();
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(body);
+          if (decoded is Map) {
+            final message = decoded['message'];
+            if (message is Map) return '${message['content'] ?? ''}';
+          }
+          return '';
+        }
+      }
+      throw AnswererUnavailable('Ollama 返回错误：模型 $model 是否已拉取？');
+    } on SocketException catch (error) {
+      throw AnswererUnavailable(
+        '连不上本地 Ollama（$baseUrl）：${error.message}。',
+      );
+    } finally {
+      client.close(force: true);
+    }
+  }
+
   static String buildPrompt({
     required String question,
     required List<AnswerSource> sources,
@@ -211,6 +253,9 @@ class FakeAnswerer implements Answerer {
 
   @override
   Future<bool> isAvailable() async => true;
+
+  @override
+  Future<String> complete(String prompt) async => '{"queries":["杭州"]}';
 
   @override
   Stream<String> streamAnswer({

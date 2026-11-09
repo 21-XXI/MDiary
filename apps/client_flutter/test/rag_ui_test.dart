@@ -98,7 +98,7 @@ void main() {
     await state.reindexRag();
   }
 
-  testWidgets('导航栏进入 RAG：三个页签、检索命中、点日记回到主界面', (tester) async {
+  testWidgets('导航栏进入 RAG：三个页签、发送后自动检索、点来源回主界面', (tester) async {
     tester.view.physicalSize = const Size(1280, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -115,25 +115,18 @@ void main() {
     expect(find.text('日报'), findsOneWidget);
     expect(find.text('档案'), findsOneWidget);
 
-    await tester.enterText(find.byType(TextField).first, '西湖');
-    await tester.tap(find.widgetWithText(FilledButton, '检索'));
+    await tester.enterText(find.byKey(const Key('rag-chat-input')), '西湖');
+    await tester.tap(find.byKey(const Key('rag-send')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('杭州'), findsWidgets);
+    expect(find.textContaining('杭州'), findsWidgets, reason: '应自动检索并显示来源');
 
-    await tester.tap(
-      find
-          .descendant(
-            of: find.byType(RagPage),
-            matching: find.byType(ListTile),
-          )
-          .first,
-    );
+    await tester.tap(find.byType(ActionChip).first);
     await tester.pumpAndSettle();
     expect(find.byType(RagPage), findsNothing, reason: '应回到主界面');
     expect(state.selected?.title, '杭州');
   }, skip: skip);
 
-  testWidgets('问答页：检索后可以生成带引用的流式回答', (tester) async {
+  testWidgets('问答页：直接对话（先检索后回答）、多轮追问、新对话', (tester) async {
     tester.view.physicalSize = const Size(1280, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -145,21 +138,29 @@ void main() {
     await tester.tap(find.byTooltip('RAG（问答 / 日报 / 档案）'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField).first, '西湖');
-    await tester.tap(find.widgetWithText(FilledButton, '检索'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.widgetWithText(FilledButton, '生成回答'));
+    await tester.enterText(find.byKey(const Key('rag-chat-input')), '西湖');
+    await tester.tap(find.byKey(const Key('rag-send')));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('根据记录'), findsWidgets);
     expect(find.textContaining('[2026-11-01-杭州]'), findsWidgets);
     expect(find.textContaining('本地 '), findsWidgets, reason: '应标注模型来源');
     expect(find.textContaining('索引：'), findsWidgets, reason: '应显示索引状态');
+    expect(find.byType(ActionChip), findsWidgets, reason: '回答下应有来源');
+
+    await tester.enterText(find.byKey(const Key('rag-chat-input')), '那天气呢？');
+    await tester.tap(find.byKey(const Key('rag-send')));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('（继续）'),
+      findsWidgets,
+      reason: '有上文时应带上下文回答',
+    );
 
     await tester.tap(find.widgetWithText(TextButton, '新对话'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('根据记录'), findsNothing, reason: '新对话应清空回答');
+    expect(find.textContaining('根据记录'), findsNothing, reason: '新对话应清空消息');
+    expect(find.byType(ActionChip), findsNothing);
   }, skip: skip);
 
   testWidgets('蒸馏页：开关 + 立即蒸馏 + 列表', (tester) async {

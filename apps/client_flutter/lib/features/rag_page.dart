@@ -26,13 +26,10 @@ class _RagPageState extends State<RagPage>
   late final TabController _tabs = TabController(length: 3, vsync: this);
   final TextEditingController _query = TextEditingController();
 
-  List<RagHit> _hits = const <RagHit>[];
-  bool _searching = false;
-  bool _searched = false;
-  String _answer = '';
-  bool _answering = false;
-  StreamSubscription<String>? _answerSubscription;
+  final List<_ChatMessage> _messages = <_ChatMessage>[];
   List<AnswerTurn> _turns = const <AnswerTurn>[];
+  bool _chatBusy = false;
+  StreamSubscription<String>? _answerSubscription;
 
   int _chunkCount = 0;
   String _indexedAt = '';
@@ -116,109 +113,7 @@ class _RagPageState extends State<RagPage>
     return Column(
       children: <Widget>[
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: TextField(
-                  controller: _query,
-                  textInputAction: TextInputAction.search,
-                  onSubmitted: (_) => _search(state),
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    hintText: '问点什么，比如「去年在杭州吃了什么」',
-                    prefixIcon: Icon(Icons.search, size: 18),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: _searching ? null : () => _search(state),
-                icon: _searching
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.search, size: 18),
-                label: const Text('检索'),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.tonalIcon(
-                onPressed: _answering || _hits.isEmpty
-                    ? null
-                    : () => _generateAnswer(state),
-                icon: const Icon(Icons.auto_awesome, size: 18),
-                label: Text(_answering ? '生成中…' : '生成回答'),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              '先用「检索」看命中的日记与附件；生成式回答在 2.0.2 接入。',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-        ),
-        if (_answer.isNotEmpty || _answering)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Icon(
-                          Icons.auto_awesome,
-                          size: 16,
-                          color: theme.colorScheme.primary,
-                        ),
-                        const SizedBox(width: 6),
-                        Text('回答', style: theme.textTheme.labelLarge),
-                        const SizedBox(width: 8),
-                        Text(
-                          state.cloudEnabled
-                              ? '云端 ${state.ragSettings.cloudModel}'
-                              : '本地 ${state.ragSettings.askModel}',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        const Spacer(),
-                        if (_turns.isNotEmpty)
-                          TextButton(
-                            onPressed: _newConversation,
-                            child: const Text('新对话'),
-                          ),
-                        if (_answering)
-                          TextButton(
-                            onPressed: _stopAnswering,
-                            child: const Text('停止'),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    SelectableText(
-                      _answer.isEmpty ? '正在生成…' : _answer,
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 4),
           child: Row(
             children: <Widget>[
               Expanded(
@@ -232,87 +127,253 @@ class _RagPageState extends State<RagPage>
                   ),
                 ),
               ),
-              if (_indexTotal != null && _reindexing)
-                SizedBox(
-                  width: 140,
-                  child: LinearProgressIndicator(
-                    value: _indexTotal == 0 ? null : _indexDone! / _indexTotal!,
-                    minHeight: 3,
-                  ),
+              Text(
+                state.cloudEnabled
+                    ? '云端 ${state.ragSettings.cloudModel}'
+                    : '本地 ${state.ragSettings.askModel}',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              if (_messages.isNotEmpty)
+                TextButton(
+                  onPressed: _newChat,
+                  child: const Text('新对话'),
+                ),
+              if (_chatBusy)
+                TextButton(
+                  onPressed: _stopAnswering,
+                  child: const Text('停止'),
                 ),
             ],
           ),
         ),
-        const SizedBox(height: 8),
+        if (_indexTotal != null && _reindexing)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: LinearProgressIndicator(
+              value: _indexTotal == 0 ? null : _indexDone! / _indexTotal!,
+              minHeight: 3,
+            ),
+          ),
         Expanded(
-          child: _hits.isEmpty
-              ? EmptyState(
+          child: _messages.isEmpty
+              ? const EmptyState(
                   icon: Icons.auto_awesome_outlined,
-                  title: _searched ? '没有命中' : '还没有提问',
-                  description: _searched
-                      ? '换个说法，或先点右上角「重建索引」'
-                      : '索引由后台每日整理；也可以先重建一次',
+                  title: '和日记对话',
+                  description: '直接提问：系统会先检索日记与附件，再让模型带 [日期-标题] 引用回答；可以继续追问。',
                 )
-              : ListView.separated(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: _hits.length,
-                  separatorBuilder: (context, index) =>
-                      const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final hit = _hits[index];
-                    return ListTile(
-                      leading: Icon(
-                        hit.isAttachment
-                            ? Icons.attach_file
-                            : Icons.menu_book_outlined,
-                        size: 20,
-                      ),
-                      title: Text(
-                        '${_date(hit.date)}  ${hit.label}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        hit.snippet,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall,
-                      ),
-                      trailing: Text(
-                        hit.score.toStringAsFixed(3),
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      onTap: () => _openHit(state, hit),
-                    );
-                  },
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  itemCount: _messages.length,
+                  itemBuilder: (context, index) =>
+                      _bubble(context, state, _messages[index]),
                 ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: <Widget>[
+              Expanded(
+                child: TextField(
+                  key: const Key('rag-chat-input'),
+                  controller: _query,
+                  minLines: 1,
+                  maxLines: 4,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _send(state),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    hintText: '问点什么，比如「去年在杭州吃了什么」',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                key: const Key('rag-send'),
+                onPressed: _chatBusy ? null : () => _send(state),
+                icon: const Icon(Icons.send, size: 18),
+                label: const Text('发送'),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
-  Future<void> _search(AppState state) async {
-    final query = _query.text.trim();
-    if (query.isEmpty) return;
+  Widget _bubble(BuildContext context, AppState state, _ChatMessage message) {
+    final theme = Theme.of(context);
+    final isUser = message.isUser;
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 720),
+        margin: EdgeInsets.fromLTRB(
+          isUser ? 80 : 4,
+          6,
+          isUser ? 4 : 80,
+          6,
+        ),
+        padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
+        decoration: BoxDecoration(
+          color: isUser
+              ? theme.colorScheme.primaryContainer
+              : theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            if (!isUser) ...<Widget>[
+              Row(
+                children: <Widget>[
+                  Icon(
+                    Icons.auto_awesome,
+                    size: 14,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 5),
+                  Text('回答', style: theme.textTheme.labelSmall),
+                  if (message.queries.length > 1) ...<Widget>[
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '检索词：${message.queries.join(' / ')}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 4),
+            ],
+            SelectableText(
+              message.text.isEmpty
+                  ? (message.failed ? '处理失败' : '正在检索…')
+                  : message.text,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: message.failed ? theme.colorScheme.error : null,
+              ),
+            ),
+            if (message.sources.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: <Widget>[
+                  for (final hit in message.sources.take(6))
+                    ActionChip(
+                      visualDensity: VisualDensity.compact,
+                      avatar: Icon(
+                        hit.isAttachment
+                            ? Icons.attach_file
+                            : Icons.menu_book_outlined,
+                        size: 14,
+                      ),
+                      label: Text(
+                        '${_date(hit.date)} ${hit.label}',
+                        style: theme.textTheme.labelSmall,
+                      ),
+                      onPressed: () => _openHit(state, hit),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _send(AppState state) async {
+    final question = _query.text.trim();
+    if (question.isEmpty || _chatBusy) return;
+    _query.clear();
+    final history = _turns.length <= 6
+        ? _turns
+        : _turns.sublist(_turns.length - 6);
     setState(() {
-      _searching = true;
-      _searched = true;
+      _chatBusy = true;
+      _messages.add(_ChatMessage.user(question));
+      _messages.add(_ChatMessage.assistant());
     });
     try {
-      final hits = await state.ragSearch(query, k: 10);
+      final reply = await state.chatAsk(question, history: history);
       if (!mounted) return;
-      setState(() => _hits = hits);
+      setState(() {
+        final last = _messages.last;
+        last.sources = reply.sources;
+        last.queries = reply.queries;
+      });
+      _answerSubscription = reply.answer.listen(
+        (chunk) {
+          if (!mounted) return;
+          setState(() => _messages.last.text += chunk);
+        },
+        onError: (Object error) {
+          if (!mounted) return;
+          setState(() {
+            final last = _messages.last;
+            last
+              ..failed = true
+              ..streaming = false
+              ..text = '没答出来：$error';
+            _chatBusy = false;
+          });
+        },
+        onDone: () {
+          if (!mounted) return;
+          setState(() {
+            final last = _messages.last;
+            last.streaming = false;
+            _chatBusy = false;
+            if (!last.failed && last.text.trim().isNotEmpty) {
+              _turns = <AnswerTurn>[
+                ..._turns,
+                AnswerTurn(question: question, answer: last.text),
+              ];
+            }
+          });
+        },
+        cancelOnError: true,
+      );
     } on Object catch (error) {
       if (!mounted) return;
-      setState(() => _hits = const <RagHit>[]);
-      _snack(context, '检索失败：$error');
-    } finally {
-      if (mounted) setState(() => _searching = false);
+      setState(() {
+        final last = _messages.last;
+        last
+          ..failed = true
+          ..streaming = false
+          ..text = '没答出来：$error';
+        _chatBusy = false;
+      });
     }
   }
 
+  void _stopAnswering() {
+    _answerSubscription?.cancel();
+    if (!mounted) return;
+    setState(() {
+      if (_messages.isNotEmpty) _messages.last.streaming = false;
+      _chatBusy = false;
+    });
+  }
+
+  void _newChat() {
+    _answerSubscription?.cancel();
+    setState(() {
+      _messages.clear();
+      _turns = const <AnswerTurn>[];
+      _chatBusy = false;
+    });
+  }
   Future<void> _loadStats() async {
     try {
       final stats = AppScope.of(context).ragStats;
@@ -324,58 +385,6 @@ class _RagPageState extends State<RagPage>
     } on Object {
       // 索引库还没建好：忽略
     }
-  }
-
-  void _generateAnswer(AppState state) {
-    final query = _query.text.trim();
-    if (query.isEmpty || _hits.isEmpty) return;
-    _answerSubscription?.cancel();
-    final history = _turns.length <= 3
-        ? _turns
-        : _turns.sublist(_turns.length - 3);
-    setState(() {
-      _answer = '';
-      _answering = true;
-    });
-    _answerSubscription = state.streamAnswer(query, _hits, history: history).listen(
-      (chunk) {
-        if (!mounted) return;
-        setState(() => _answer += chunk);
-      },
-      onError: (Object error) {
-        if (!mounted) return;
-        setState(() => _answering = false);
-        _snack(context, '生成失败：$error');
-      },
-      onDone: () {
-        if (!mounted) return;
-        setState(() {
-          _answering = false;
-          final question = _query.text.trim();
-          if (_answer.trim().isNotEmpty) {
-            _turns = <AnswerTurn>[
-              ..._turns,
-              AnswerTurn(question: question, answer: _answer),
-            ];
-          }
-        });
-      },
-      cancelOnError: true,
-    );
-  }
-
-  void _newConversation() {
-    _answerSubscription?.cancel();
-    setState(() {
-      _turns = const <AnswerTurn>[];
-      _answer = '';
-      _answering = false;
-    });
-  }
-
-  void _stopAnswering() {
-    _answerSubscription?.cancel();
-    setState(() => _answering = false);
   }
 
   Future<void> _openHit(AppState state, RagHit hit) async {
@@ -686,4 +695,28 @@ class _RagPageState extends State<RagPage>
     final now = DateTime.now();
     return DateTime(now.year, now.month, now.day);
   }
+}
+/// 一条对话消息（用户 / 助手）。
+class _ChatMessage {
+  _ChatMessage.user(this.text)
+    : isUser = true,
+      sources = const <RagHit>[],
+      queries = const <String>[],
+      streaming = false,
+      failed = false;
+
+  _ChatMessage.assistant()
+    : isUser = false,
+      text = '',
+      sources = const <RagHit>[],
+      queries = const <String>[],
+      streaming = true,
+      failed = false;
+
+  final bool isUser;
+  String text;
+  List<RagHit> sources;
+  List<String> queries;
+  bool streaming;
+  bool failed;
 }

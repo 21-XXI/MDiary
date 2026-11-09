@@ -1,7 +1,7 @@
 # v2.3 验收清单
 
 对应 `docs/project.md` 第 3/4 节与 `docs/rag.md`。执行环境：Windows 10/11 x64，
-`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.3.1**（2026-11-06，含 2.3.1 skill 接 agent）。
+`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.4.0**（2026-11-09，含 2.4 对话问答）。
 
 > 状态列：`PASS` / `FAIL`（附现象）/ `BLOCKED`；标「自动」的由 `flutter test` 覆盖。
 > v1.1.1 及更早的验收记录见 git 历史中的 `acceptance-v1.1.md`。
@@ -11,10 +11,10 @@
 | # | 项 | 命令 | 期望 | 状态 |
 |---|---|---|---|---|
 | A1 | 静态分析 | `flutter analyze` | 0 issue | **PASS**（2026-11-06，0 issue） |
-| A2 | 单元/界面测试 | `flutter test` | 全绿 | **PASS**（239 passed） |
+| A2 | 单元/界面测试 | `flutter test` | 全绿 | **PASS**（244 passed） |
 | A3 | Release 构建 | `scripts\build.ps1` | 产出 exe | **PASS**（Release 目录 21.9 MB） |
 | A4 | 冒烟 | `scripts\smoke.ps1` | 启动建库 + 单实例 | **PASS**（verify.ps1 自动执行） |
-| A5 | 交付校验 | `SHA256SUMS.txt` | 与 zip 一致 | **PASS**（`MDiary-2.3.1-windows-x64.zip`） |
+| A5 | 交付校验 | `SHA256SUMS.txt` | 与 zip 一致 | **PASS**（`MDiary-2.4.0-windows-x64.zip`） |
 
 ## B. 书写 / 存储（v1.1.1 能力回归）
 
@@ -138,9 +138,21 @@
 | L3 | DSH 目录可见 | 重启/刷新 agent | skill 目录出现 `diary-segmenter` | **PASS（实测）** |
 | L4 | 蒸馏 skill 可装 | 对 `db/skill/<时间>` 执行脚本 | 同样的安装流程可用 | 人工 |
 
-## M. 汇总
+## M. v2.4 对话问答
 
-- 自动化：`flutter analyze` 0 issue、`flutter test` **239 passed**、构建成功、冒烟通过。
-- 交付：`dist/MDiary-2.3.1-windows-x64/`、同名 zip、`SHA256SUMS.txt`。
+| # | 项 | 操作 | 期望 | 状态 |
+|---|---|---|---|---|
+| M1 | 直接对话 | 输入问题点「发送」 | 先检索、再流式回答，无需二次点击 | **自动**：`rag_ui_test` |
+| M2 | 引用与来源 | 看回答 | 带 `[日期-标题]`，气泡下有来源标签 | **自动**：`rag_ui_test` |
+| M3 | 多轮追问 | 连续问两轮 | 第二轮带上下文（Fake 前缀「（继续）」） | **自动**：`rag_ui_test`、`rag_chat_test` |
+| M4 | 检索词改写 | 有上文时提问 | 模型输出 JSON 查询被采用并合并去重 | **自动**：`rag_chat_test` |
+| M5 | 改写失败兜底 | 模型报错/非 JSON | 退回原问题，不影响回答 | **自动**：`rag_chat_test` |
+| M6 | 新对话 | 点「新对话」 | 消息与上下文清空 | **自动**：`rag_ui_test` |
+| M7 | 停止 | 生成中点「停止」 | 立即停止，保留已生成内容 | 人工 |
+
+## N. 汇总
+
+- 自动化：`flutter analyze` 0 issue、`flutter test` **244 passed**、构建成功、冒烟通过。
+- 交付：`dist/MDiary-2.4.0-windows-x64/`、同名 zip、`SHA256SUMS.txt`。
 - 待人工确认：B3、G1（真机点击）、H7、H10。
 - 已知限制：问答无多轮记忆；embedding 仅本地；模型质量取决于本机模型。
