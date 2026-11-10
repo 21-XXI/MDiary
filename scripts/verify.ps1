@@ -1,4 +1,4 @@
-﻿# MDiary 提交前校验：analyze -> test -> build（任一失败即中止）
+# MDiary 提交前校验：analyze -> test -> build（任一失败即中止）
 #
 # 用法：powershell -ExecutionPolicy Bypass -File scripts\verify.ps1 [-SkipBuild] [-SkipTest] [-SkipSmoke]
 param(
@@ -10,6 +10,13 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $app = Join-Path $root 'apps\client_flutter'
+
+Write-Host "==> 生成 skill 提示词" -ForegroundColor Cyan
+$dart = Join-Path (Split-Path (Get-Command flutter).Source) 'cache\dart-sdk\bin\dart.exe'
+Push-Location $root
+& $dart run tool/gen_skill_prompts.dart
+if ($LASTEXITCODE -ne 0) { Pop-Location; throw "skill 提示词生成失败" }
+Pop-Location
 
 Write-Host "==> 工作区: $app" -ForegroundColor Cyan
 Push-Location $app

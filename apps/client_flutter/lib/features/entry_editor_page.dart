@@ -34,8 +34,6 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
     text: widget.entry.bodyMd,
   );
   final FocusNode _bodyFocus = FocusNode();
-  final ScrollController _bodyScroll = ScrollController();
-  final ScrollController _gutterScroll = ScrollController();
 
   EditorMode _mode = EditorMode.edit;
   List<Attachment> _attachments = const <Attachment>[];
@@ -47,11 +45,7 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
   void initState() {
     super.initState();
     _reloadAttachments();
-    _bodyScroll.addListener(() {
-      if (_gutterScroll.hasClients && _bodyScroll.hasClients) {
-        _gutterScroll.jumpTo(_bodyScroll.offset);
-      }
-    });
+
   }
 
   @override
@@ -490,27 +484,6 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
       theme.colorScheme.onSurface,
       fontFamily: _state.editorFont,
     );
-    final lines = '\n'.allMatches(_bodyController.text).length + 1;
-    final offset = _bodyController.selection.baseOffset.clamp(
-      0,
-      _bodyController.text.length,
-    );
-    final currentLine = '\n'.allMatches(_bodyController.text.substring(0, offset)).length;
-    final numbers = <TextSpan>[];
-    for (var i = 0; i < lines; i++) {
-      numbers.add(
-        TextSpan(
-          text: '${i + 1}',
-          style: style.copyWith(
-            color: i == currentLine
-                ? theme.colorScheme.primary
-                : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
-            fontWeight: i == currentLine ? FontWeight.w700 : FontWeight.w400,
-          ),
-        ),
-      );
-      if (i != lines - 1) numbers.add(TextSpan(text: '\n', style: style));
-    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
       child: Focus(
@@ -555,40 +528,23 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
           }
           return KeyEventResult.ignored;
         },
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            SizedBox(
-              width: 36,
-              child: SingleChildScrollView(
-                controller: _gutterScroll,
-                physics: const NeverScrollableScrollPhysics(),
-                child: Text.rich(TextSpan(children: numbers), textAlign: TextAlign.right),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextField(
-                key: const Key('editor-body'),
-                controller: _bodyController,
-                focusNode: _bodyFocus,
-                scrollController: _bodyScroll,
-                onChanged: _onBodyChanged,
-                maxLines: null,
-                expands: true,
-                textAlignVertical: TextAlignVertical.top,
-                keyboardType: TextInputType.multiline,
-                inputFormatters: <TextInputFormatter>[AutoPairFormatter()],
-                style: style,
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  isDense: true,
-                  contentPadding: EdgeInsets.zero,
-                  hintText: '写点什么…支持 Markdown，输入后自动保存',
-                ),
-              ),
-            ),
-          ],
+        child: TextField(
+          key: const Key('editor-body'),
+          controller: _bodyController,
+          focusNode: _bodyFocus,
+          onChanged: _onBodyChanged,
+          maxLines: null,
+          expands: true,
+          textAlignVertical: TextAlignVertical.top,
+          keyboardType: TextInputType.multiline,
+          inputFormatters: <TextInputFormatter>[AutoPairFormatter()],
+          style: style,
+          decoration: const InputDecoration(
+            border: InputBorder.none,
+            isDense: true,
+            contentPadding: EdgeInsets.zero,
+            hintText: '写点什么…支持 Markdown，输入后自动保存',
+          ),
         ),
       ),
     );
