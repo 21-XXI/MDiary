@@ -247,6 +247,14 @@ class AppState extends ChangeNotifier {
     }
     entryRepo.saveContent(entry.id, body: body);
     await refresh();
+    // 附加 md 也进 RAG：先重建索引（索引是增量/可重建的，失败不影响保存）。
+    unawaited(() async {
+      try {
+        await rag.reindex();
+      } on Object {
+        // 模型不可用或索引库未就绪：下次每日任务会补
+      }
+    }());
     return attachment;
   }
 

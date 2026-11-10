@@ -1,7 +1,7 @@
 # v2.3 验收清单
 
 对应 `docs/project.md` 第 3/4 节与 `docs/rag.md`。执行环境：Windows 10/11 x64，
-`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.7.1**（2026-11-10，含模型收拢/Agent 设置）。
+`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.8.0**（2026-11-10，含编辑器/附加 md）。
 
 > 状态列：`PASS` / `FAIL`（附现象）/ `BLOCKED`；标「自动」的由 `flutter test` 覆盖。
 > v1.1.1 及更早的验收记录见 git 历史中的 `acceptance-v1.1.md`。
@@ -11,10 +11,10 @@
 | # | 项 | 命令 | 期望 | 状态 |
 |---|---|---|---|---|
 | A1 | 静态分析 | `flutter analyze` | 0 issue | **PASS**（2026-11-06，0 issue） |
-| A2 | 单元/界面测试 | `flutter test` | 全绿 | **PASS**（284 passed） |
+| A2 | 单元/界面测试 | `flutter test` | 全绿 | **PASS**（293 passed） |
 | A3 | Release 构建 | `scripts\build.ps1` | 产出 exe | **PASS**（Release 目录 21.9 MB） |
 | A4 | 冒烟 | `scripts\smoke.ps1` | 启动建库 + 单实例 | **PASS**（verify.ps1 自动执行） |
-| A5 | 交付校验 | `SHA256SUMS.txt` | 与 zip 一致 | **PASS**（`MDiary-2.7.1-windows-x64.zip`） |
+| A5 | 交付校验 | `SHA256SUMS.txt` | 与 zip 一致 | **PASS**（`MDiary-2.8.0-windows-x64.zip`） |
 
 ## B. 书写 / 存储（v1.1.1 能力回归）
 
@@ -199,7 +199,7 @@
 
 ## R. 汇总
 
-- 自动化：`flutter analyze` 0 issue、`flutter test` **284 passed**、构建成功、冒烟通过。
-- 交付：`dist/MDiary-2.7.1-windows-x64/`、同名 zip、`SHA256SUMS.txt`。
+- 自动化：`flutter analyze` 0 issue、`flutter test` **293 passed**、构建成功、冒烟通过。
+- 交付：`dist/MDiary-2.8.0-windows-x64/`、同名 zip、`SHA256SUMS.txt`。
 - 待人工确认：B3、G1（真机点击）、H7、H10。
 - 已知限制：问答无多轮记忆；embedding 仅本地；模型质量取决于本机模型。
