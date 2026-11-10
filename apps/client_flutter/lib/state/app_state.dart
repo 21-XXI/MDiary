@@ -17,6 +17,7 @@ import '../rag/answer.dart';
 import '../rag/chat.dart';
 import '../rag/cloud_client.dart';
 import '../rag/embedder.dart';
+import '../rag/model_registry.dart';
 import '../rag/rag_settings.dart';
 import '../rag/rag_service.dart';
 import '../rag/report_job.dart';
@@ -137,12 +138,19 @@ class AppState extends ChangeNotifier {
     this.ragAnswererOverride,
     this.skillDistillerOverride,
     RagSettingsStore? ragSettingsStore,
+    ModelRegistryStore? modelRegistryStore,
   }) : _filePicker = filePicker ?? _defaultFilePicker,
+       _modelRegistryStore = modelRegistryStore ?? ModelRegistryStore(),
        _ragSettingsStore = ragSettingsStore ?? RagSettingsStore(),
        _directoryPicker = directoryPicker ?? _defaultDirectoryPicker,
        _clipboardImageReader = clipboardImageReader ?? ClipboardImage.read,
        tagRepo = tagRepository ?? TagRepository(db) {
     _ragSettings = _ragSettingsStore.load();
+    _modelRegistry = _modelRegistryStore.load();
+    if (_modelRegistry.isEmpty) {
+      _modelRegistry = ModelRegistry.migration(_ragSettings);
+      _modelRegistryStore.save(_modelRegistry);
+    }
   }
 
   AppDatabase db;
@@ -159,10 +167,37 @@ class AppState extends ChangeNotifier {
   final Answerer? ragAnswererOverride;
   final SkillDistiller? skillDistillerOverride;
   final RagSettingsStore _ragSettingsStore;
+  final ModelRegistryStore _modelRegistryStore;
   late RagSettings _ragSettings;
+  ModelRegistry _modelRegistry = const ModelRegistry();
 
   /// 当前模型设置（全局，写在 `<数据目录>/settings.json`）。
   RagSettings get ragSettings => _ragSettings;
+
+  /// 统一模型配置（`<数据目录>/models.json`）。
+  ModelRegistry get modelRegistry => _modelRegistry;
+
+  String? get modelsPath => _modelRegistryStore.path;
+
+  ModelProfile? profileFor(ModelRole role) => _modelRegistry.profileFor(role);
+
+  void saveModelRegistry(ModelRegistry next) {
+    _modelRegistry = next;
+    _modelRegistryStore.save(next);
+    // 向量模型可能变了：关闭旧索引连接，下次检索重建。
+    _rag?.close();
+    _rag = null;
+    notifyListeners();
+  }
+
+  void upsertModelProfile(ModelProfile profile) =>
+      saveModelRegistry(_modelRegistry.withProfile(profile));
+
+  void removeModelProfile(String id) =>
+      saveModelRegistry(_modelRegistry.withoutProfile(id));
+
+  void setRoleProfile(ModelRole role, String? profileId) =>
+      saveModelRegistry(_modelRegistry.withRole(role, profileId));
 
   void updateRagSettings(RagSettings next) {
     final embedChanged =
@@ -962,23 +997,64 @@ class AppState extends ChangeNotifier {
 
   bool get cloudEnabled => cloudConfig != null;
 
-  Summarizer get ragSummarizer =>
-      ragSummarizerOverride ??
-      (cloudConfig != null
-          ? CloudSummarizer(cloudConfig!)
-          : OllamaSummarizer(
-              model: _ragSettings.generateModel,
-              baseUrl: _ragSettings.baseUrl,
-            ));
+  Summarizer get ragSummarizer {
+    final override = ragSummarizerOverride;
+    if (override != null) return override;
+    final profile = _modelRegistry.profileFor(ModelRole.generate);
+    if (profile != null) {
+      if (profile.isCloud) {
+        final key = SecretStore.unprotect(profile.apiKeyCipher);
+        if (key != null && key.isNotEmpty) {
+          return CloudSummarizer(
+            CloudConfig(
+              baseUrl: profile.baseUrl,
+              model: profile.model,
+              apiKey: key,
+            ),
+          );
+        }
+      } else {
+        return OllamaSummarizer(
+          model: profile.model,
+          baseUrl: profile.baseUrl,
+        );
+      }
+    }
+    return cloudConfig != null
+        ? CloudSummarizer(cloudConfig!)
+        : OllamaSummarizer(
+            model: _ragSettings.generateModel,
+            baseUrl: _ragSettings.baseUrl,
+          );
+  }
 
-  Answerer get ragAnswerer =>
-      ragAnswererOverride ??
-      (cloudConfig != null
-          ? CloudAnswerer(cloudConfig!)
-          : OllamaAnswerer(
-              model: _ragSettings.askModel,
-              baseUrl: _ragSettings.baseUrl,
-            ));
+  Answerer get ragAnswerer {
+    final override = ragAnswererOverride;
+    if (override != null) return override;
+    final profile = _modelRegistry.profileFor(ModelRole.chat);
+    if (profile != null) {
+      if (profile.isCloud) {
+        final key = SecretStore.unprotect(profile.apiKeyCipher);
+        if (key != null && key.isNotEmpty) {
+          return CloudAnswerer(
+            CloudConfig(
+              baseUrl: profile.baseUrl,
+              model: profile.model,
+              apiKey: key,
+            ),
+          );
+        }
+      } else {
+        return OllamaAnswerer(model: profile.model, baseUrl: profile.baseUrl);
+      }
+    }
+    return cloudConfig != null
+        ? CloudAnswerer(cloudConfig!)
+        : OllamaAnswerer(
+            model: _ragSettings.askModel,
+            baseUrl: _ragSettings.baseUrl,
+          );
+  }
 
   // ───────────────────────────── 蒸馏 skill（v2.2） ─────────────────────────────
 

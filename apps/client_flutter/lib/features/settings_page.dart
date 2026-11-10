@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import '../core/formatters.dart';
 import '../data/data_root_migration.dart';
 import '../core/secret_store.dart';
+import '../rag/model_registry.dart';
 import '../rag/rag_settings.dart';
 import '../state/app_scope.dart';
 import '../state/app_state.dart';
@@ -154,6 +155,13 @@ class SettingsPage extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+          const SectionLabel('模型'),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: _ModelsCard(state: state),
             ),
           ),
           const SectionLabel('RAG 模型'),
@@ -1238,3 +1246,257 @@ const Map<String, String> _editorFonts = <String, String>{
   'Courier New': 'Courier New',
   'Microsoft YaHei UI': '微软雅黑（非等宽）',
 };
+/// 统一模型管理：模型配置 + 角色映射。
+class _ModelsCard extends StatelessWidget {
+  const _ModelsCard({required this.state});
+
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final registry = state.modelRegistry;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                '按角色取模型：一套配置可被多个角色复用；问答/生成/向量优先用这里的映射，未配置时回退到下方旧设置。',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.tonalIcon(
+              onPressed: () => _edit(context),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('添加模型'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        if (registry.profiles.isEmpty)
+          Text(
+            '还没有模型配置；首次启动会从旧设置自动迁移一套。',
+            style: theme.textTheme.bodySmall,
+          )
+        else
+          for (final profile in registry.profiles)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                profile.isCloud ? Icons.cloud_outlined : Icons.computer,
+                size: 18,
+              ),
+              title: Text(profile.name),
+              subtitle: Text(
+                profile.summary,
+                style: theme.textTheme.labelSmall,
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  IconButton(
+                    tooltip: '编辑',
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    onPressed: () => _edit(context, existing: profile),
+                  ),
+                  IconButton(
+                    tooltip: '删除',
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    onPressed: () => state.removeModelProfile(profile.id),
+                  ),
+                ],
+              ),
+            ),
+        const Divider(height: 20),
+        for (final role in ModelRole.values) ...<Widget>[
+          Row(
+            children: <Widget>[
+              SizedBox(
+                width: 170,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(role.label, style: theme.textTheme.bodyMedium),
+                    Text(
+                      role.hint,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  key: ValueKey('role-${role.name}-${registry.roleProfiles[role]}'),
+                  initialValue: registry.byId(registry.roleProfiles[role]) == null
+                      ? '__none__'
+                      : registry.roleProfiles[role]!,
+                  isDense: true,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                  items: <DropdownMenuItem<String>>[
+                    const DropdownMenuItem<String>(
+                      value: '__none__',
+                      child: Text('未设置（用旧设置回退）'),
+                    ),
+                    for (final profile in registry.profiles)
+                      DropdownMenuItem<String>(
+                        value: profile.id,
+                        child: Text(profile.name),
+                      ),
+                  ],
+                  onChanged: (value) => state.setRoleProfile(
+                    role,
+                    value == null || value == '__none__' ? null : value,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+        Text(
+          '云端 Key 用 Windows DPAPI 加密；向量角色只支持本地 Ollama。',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _edit(BuildContext context, {ModelProfile? existing}) async {
+    final nameController = TextEditingController(text: existing?.name ?? '');
+    final baseController = TextEditingController(
+      text: existing?.baseUrl ?? RagSettings.defaultBaseUrl,
+    );
+    final modelController = TextEditingController(
+      text: existing?.model ?? RagSettings.defaultGenerateModel,
+    );
+    final keyController = TextEditingController();
+    var provider = existing?.provider ?? 'ollama';
+
+    final result = await showDialog<ModelProfile>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text(existing == null ? '添加模型' : '编辑模型'),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: '名称（给角色下拉显示用）',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: provider,
+                  decoration: const InputDecoration(
+                    labelText: '提供商',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const <DropdownMenuItem<String>>[
+                    DropdownMenuItem(value: 'ollama', child: Text('本地 Ollama')),
+                    DropdownMenuItem(
+                      value: 'openai',
+                      child: Text('云端（OpenAI 兼容）'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setDialogState(() => provider = value);
+                  },
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: baseController,
+                  decoration: InputDecoration(
+                    labelText: provider == 'ollama' ? 'Ollama 地址' : '云端地址',
+                    hintText: provider == 'ollama'
+                        ? RagSettings.defaultBaseUrl
+                        : RagSettings.defaultCloudBaseUrl,
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: modelController,
+                  decoration: const InputDecoration(
+                    labelText: '模型名',
+                    hintText: '例如 qwen3:8b / gpt-4o-mini',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                if (provider == 'openai') ...<Widget>[
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: keyController,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: existing?.apiKeyCipher.isNotEmpty == true
+                          ? 'API Key（留空保持不变）'
+                          : 'API Key',
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final name = nameController.text.trim();
+                final model = modelController.text.trim();
+                if (name.isEmpty || model.isEmpty) return;
+                final base = baseController.text.trim().isEmpty
+                    ? (provider == 'ollama'
+                          ? RagSettings.defaultBaseUrl
+                          : RagSettings.defaultCloudBaseUrl)
+                    : baseController.text.trim();
+                final key = keyController.text.trim();
+                Navigator.of(dialogContext).pop(
+                  ModelProfile(
+                    id: existing?.id ??
+                        'p-${DateTime.now().microsecondsSinceEpoch}',
+                    name: name,
+                    provider: provider,
+                    baseUrl: base,
+                    model: model,
+                    apiKeyCipher: key.isEmpty
+                        ? (existing?.apiKeyCipher ?? '')
+                        : SecretStore.protect(key),
+                    temperature: existing?.temperature ?? 0.3,
+                  ),
+                );
+              },
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+    nameController.dispose();
+    baseController.dispose();
+    modelController.dispose();
+    keyController.dispose();
+    if (result != null) state.upsertModelProfile(result);
+  }
+}
