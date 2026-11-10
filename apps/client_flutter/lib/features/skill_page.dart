@@ -42,7 +42,40 @@ class _SkillPageState extends State<SkillPage> {
       _error = null;
     });
     try {
-      final skill = await state.distillSkill();
+      final markdown = await state.previewSkill();
+      if (!mounted) return;
+      setState(() => _busy = false);
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('预览 skill'),
+          content: SizedBox(
+            width: 760,
+            height: 520,
+            child: SingleChildScrollView(
+              child: MarkdownView(
+                data: markdown,
+                resolveLocalPath: (_) => null,
+                emoji: state.emojiMap,
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('保存为新 skill'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+      setState(() => _busy = true);
+      final skill = await state.saveSkill(markdown);
       if (!mounted) return;
       setState(() {
         _last = skill;

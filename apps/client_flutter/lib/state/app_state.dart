@@ -1334,6 +1334,36 @@ class AppState extends ChangeNotifier {
     ).run(soulMarkdown: soul);
   }
 
+  /// 生成预览，不落盘。
+  Future<String> previewSkill() async {
+    if (!skillEnabled) {
+      throw SkillUnavailable('先在「蒸馏」页打开开关');
+    }
+    final distiller = skillDistillerOverride ?? _requireCloudDistiller();
+    var soul = soulJob.read();
+    if (soul == null || soul.trim().isEmpty) {
+      await soulJob.generate(force: true);
+      soul = soulJob.read();
+    }
+    return SkillJob(
+      rag: rag.database,
+      entries: entryRepo,
+      tags: tagRepo,
+      distiller: distiller,
+    ).preview(soulMarkdown: soul);
+  }
+
+  /// 预览确认后保存为新 skill。
+  Future<DistilledSkill> saveSkill(String markdown) async {
+    final distiller = skillDistillerOverride ?? _requireCloudDistiller();
+    return SkillJob(
+      rag: rag.database,
+      entries: entryRepo,
+      tags: tagRepo,
+      distiller: distiller,
+    ).save(markdown);
+  }
+
   SkillDistiller _requireCloudDistiller() {
     final config = cloudConfig;
     if (config == null) {

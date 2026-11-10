@@ -172,7 +172,9 @@ void main() {
     await seed();
     await tester.pumpWidget(MDiaryApp(state: state));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('蒸馏（skill）'));
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('蒸馏（skill）'));
     await tester.pumpAndSettle();
 
     expect(find.text('启用蒸馏'), findsOneWidget);
@@ -180,6 +182,9 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.widgetWithText(FilledButton, '立即蒸馏'));
+    await tester.pumpAndSettle();
+    expect(find.text('预览 skill'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, '保存为新 skill'));
     await tester.pumpAndSettle();
 
     expect(find.text('SKILL.md'), findsNothing);

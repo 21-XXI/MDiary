@@ -204,9 +204,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
               ),
               _HeaderIconButton(
-                tooltip: '蒸馏（skill）',
-                onPressed: () => _openPage(const SkillPage()),
-                icon: const Icon(Icons.auto_fix_high),
+                tooltip: '星图',
+                onPressed: _openStarMap,
+                icon: const Icon(Icons.hub_outlined),
               ),
               _HeaderIconButton(
                 tooltip: 'RAG（问答 / 日报 / 档案）',
@@ -214,40 +214,72 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 icon: const Icon(Icons.auto_awesome_outlined),
               ),
               _HeaderIconButton(
-                tooltip: 'Agent 设置',
-                onPressed: () => _openPage(const AgentPage()),
-                icon: const Icon(Icons.smart_toy_outlined),
-              ),
-              _HeaderIconButton(
                 tooltip: '记忆对话',
                 onPressed: () => _openPage(const MemoryPage()),
                 icon: const Icon(Icons.forum_outlined),
               ),
               _HeaderIconButton(
-                tooltip: '分词导入',
-                onPressed: () => _openPage(const SegmentPage()),
-                icon: const Icon(Icons.call_split),
-              ),
-              _HeaderIconButton(
-                tooltip: '星图',
-                onPressed: _openStarMap,
-                icon: const Icon(Icons.hub_outlined),
-              ),
-              _HeaderIconButton(
-                tooltip: state.trashCount > 0
-                    ? '回收站（${state.trashCount}）'
-                    : '回收站',
-                onPressed: () => _openPage(const TrashPage()),
-                icon: Badge(
-                  isLabelVisible: state.trashCount > 0,
-                  label: Text('${state.trashCount}'),
-                  child: const Icon(Icons.delete_outline),
-                ),
-              ),
-              _HeaderIconButton(
                 tooltip: '设置',
                 onPressed: () => _openPage(const SettingsPage()),
                 icon: const Icon(Icons.settings_outlined),
+              ),
+              PopupMenuButton<String>(
+                tooltip: '更多',
+                icon: const Icon(Icons.more_vert),
+                onSelected: (value) {
+                  switch (value) {
+                    case 'segment':
+                      _openPage(const SegmentPage());
+                    case 'skill':
+                      _openPage(const SkillPage());
+                    case 'agent':
+                      _openPage(const AgentPage());
+                    case 'trash':
+                      _openPage(const TrashPage());
+                  }
+                },
+                itemBuilder: (menuContext) => <PopupMenuEntry<String>>[
+                  const PopupMenuItem<String>(
+                    value: 'segment',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.call_split, size: 18),
+                      title: Text('分词导入'),
+                    ),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'skill',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.auto_fix_high, size: 18),
+                      title: Text('蒸馏（skill）'),
+                    ),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'agent',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.smart_toy_outlined, size: 18),
+                      title: Text('Agent 设置'),
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'trash',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.delete_outline, size: 18),
+                      title: Text(
+                        state.trashCount > 0
+                            ? '回收站（${state.trashCount}）'
+                            : '回收站',
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

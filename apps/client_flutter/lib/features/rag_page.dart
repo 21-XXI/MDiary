@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 
 import '../rag/answer.dart';
@@ -30,6 +31,7 @@ class _RagPageState extends State<RagPage>
   List<AnswerTurn> _turns = const <AnswerTurn>[];
   bool _chatBusy = false;
   StreamSubscription<String>? _answerSubscription;
+  final List<TapGestureRecognizer> _recognizers = <TapGestureRecognizer>[];
 
   int _chunkCount = 0;
   String _indexedAt = '';
@@ -254,14 +256,7 @@ class _RagPageState extends State<RagPage>
               ),
               const SizedBox(height: 4),
             ],
-            SelectableText(
-              message.text.isEmpty
-                  ? (message.failed ? '处理失败' : '正在检索…')
-                  : message.text,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: message.failed ? theme.colorScheme.error : null,
-              ),
-            ),
+            _answerText(context, state, message),
             if (message.sources.isNotEmpty) ...<Widget>[
               const SizedBox(height: 8),
               Wrap(
@@ -292,6 +287,56 @@ class _RagPageState extends State<RagPage>
     );
   }
 
+  Widget _answerText(
+    BuildContext context,
+    AppState state,
+    _ChatMessage message,
+  ) {
+    final theme = Theme.of(context);
+    final fallback = message.text.isEmpty
+        ? (message.failed ? '处理失败' : '正在检索…')
+        : message.text;
+    if (message.sources.isEmpty || message.text.isEmpty) {
+      return SelectableText(fallback, style: theme.textTheme.bodyMedium);
+    }
+    final hits = <String, RagHit>{
+      for (final hit in message.sources) '${_date(hit.date)}-${hit.label}': hit,
+    };
+    final spans = <InlineSpan>[];
+    var last = 0;
+    for (final match in RegExp(r'\[([^\]\n]{2,80})\]').allMatches(message.text)) {
+      final hit = hits[match.group(1)!.trim()];
+      if (hit == null) continue;
+      if (match.start > last) {
+        spans.add(TextSpan(text: message.text.substring(last, match.start)));
+      }
+      final recognizer = TapGestureRecognizer()..onTap = () => _openHit(state, hit);
+      _recognizers.add(recognizer);
+      spans.add(
+        TextSpan(
+          text: match.group(0),
+          style: TextStyle(
+            color: theme.colorScheme.tertiary,
+            decoration: TextDecoration.underline,
+          ),
+          recognizer: recognizer,
+        ),
+      );
+      last = match.end;
+    }
+    if (spans.isEmpty) {
+      return SelectableText(fallback, style: theme.textTheme.bodyMedium);
+    }
+    spans.add(TextSpan(text: message.text.substring(last)));
+    return Text.rich(
+      TextSpan(
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: message.failed ? theme.colorScheme.error : null,
+        ),
+        children: spans,
+      ),
+    );
+  }
   Future<void> _send(AppState state) async {
     final question = _query.text.trim();
     if (question.isEmpty || _chatBusy) return;
@@ -368,6 +413,10 @@ class _RagPageState extends State<RagPage>
 
   void _newChat() {
     _answerSubscription?.cancel();
+    for (final recognizer in _recognizers) {
+      recognizer.dispose();
+    }
+    _recognizers.clear();
     setState(() {
       _messages.clear();
       _turns = const <AnswerTurn>[];

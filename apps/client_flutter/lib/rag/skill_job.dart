@@ -231,13 +231,23 @@ class SkillJob {
   }
 
   Future<DistilledSkill> run({String? soulMarkdown}) async {
+    final markdown = await preview(soulMarkdown: soulMarkdown);
+    return save(markdown);
+  }
+
+  /// 只生成不落盘：给 UI 预览用。
+  Future<String> preview({String? soulMarkdown}) async {
     final soul = (soulMarkdown ?? _readSoul()).trim();
     if (soul.isEmpty) {
       throw SkillUnavailable('还没有 soul.md：先让灵魂档案生成一次，再蒸馏');
     }
     final digest = buildDigest();
     final body = await distiller.distill(soul: soul, digest: digest);
-    final markdown = _compose(body, soulBytes: utf8.encode(soul).length);
+    return _compose(body, soulBytes: utf8.encode(soul).length);
+  }
+
+  /// 预览确认后保存（新目录，不覆盖）。
+  Future<DistilledSkill> save(String markdown) async {
     final created = _clock();
     final dir = _uniqueDirectory(created);
     Directory(dir).createSync(recursive: true);
@@ -248,7 +258,7 @@ class SkillJob {
       'created_at': created.toIso8601String(),
       'model': distiller.modelId,
       'bytes': utf8.encode(markdown).length,
-      'soul_bytes': utf8.encode(soul).length,
+      'soul_bytes': 0,
       'entries': entries.query().length,
       'samples': _samples().length,
       'tags': tags.allNames().length,
