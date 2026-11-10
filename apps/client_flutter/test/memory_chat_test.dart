@@ -32,6 +32,17 @@ void main() {
     expect(prompt, contains('用户：我去过哪？'));
   });
 
+  test('没有 skill 时提示词不注入预设角色', () {
+    final prompt = buildMemoryPrompt(
+      skill: '',
+      history: const <MemoryMessage>[],
+      question: '你好',
+    );
+    expect(prompt, isNot(contains('记忆助手')));
+    expect(prompt, isNot(contains('资料')));
+    expect(prompt, contains('用户：你好'));
+  });
+
   test('JSONL 追加/读取/清空', () {
     final sandbox = Directory.systemTemp.createTempSync('mdiary_mem_');
     addTearDown(() => sandbox.deleteSync(recursive: true));
@@ -83,6 +94,12 @@ void main() {
       state.dispose();
       state.db.dispose();
       if (sandbox.existsSync()) sandbox.deleteSync(recursive: true);
+    });
+
+    test('可选择模型默认预设并按库保存', () async {
+      state.setMemorySkill(AppState.memoryModelPreset);
+      expect(state.memorySkillSelection, AppState.memoryModelPreset);
+      expect(state.memorySkillName, '模型默认预设');
     });
 
     test('没有 skill 时走普通对话，不报错', () async {

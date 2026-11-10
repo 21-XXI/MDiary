@@ -345,20 +345,50 @@ class AppState extends ChangeNotifier {
   List<MemoryMessage> loadMemoryChat() =>
       MemoryChatStore(memoryChatPath).load();
 
-  String? get memorySkillName {
-    final skills = listSkills();
-    return skills.isEmpty ? null : skills.first.name;
+  static const String memoryModelPreset = '__model__';
+  static const String memoryLatestSkill = '__latest__';
+
+  /// 记忆对话当前选择的 skill：`__model__` / `__latest__` / skill 目录名。
+  String get memorySkillSelection =>
+      metaRepo.get('memory_skill') ?? memoryLatestSkill;
+
+  void setMemorySkill(String value) {
+    metaRepo.set('memory_skill', value);
+    notifyListeners();
   }
 
+  String? get memorySkillName {
+    final selection = memorySkillSelection;
+    final skills = listSkills();
+    if (selection == memoryModelPreset) return '模型默认预设';
+    if (selection == memoryLatestSkill) {
+      return skills.isEmpty ? '模型默认预设' : skills.first.name;
+    }
+    for (final skill in skills) {
+      if (skill.name == selection) return skill.name;
+    }
+    return '未找到，已回退模型默认预设';
+  }
+
+  String _memorySkillMarkdown() {
+    final selection = memorySkillSelection;
+    final skills = listSkills();
+    if (selection == memoryModelPreset || skills.isEmpty) return '';
+    if (selection == memoryLatestSkill) return skills.first.markdown;
+    for (final skill in skills) {
+      if (skill.name == selection) return skill.markdown;
+    }
+    return '';
+  }
   /// 只用蒸馏 skill 的记忆对话（不检索日记）；按库持久化。
   Future<MemoryMessage> askMemory(String question) async {
     if (!_agentConfig.allowReadSkill) {
       throw StateError('Agent 权限关闭：读取 skill');
     }
-    final skills = listSkills();
+    final skillMarkdown = _memorySkillMarkdown();
     final history = loadMemoryChat();
     final prompt = buildMemoryPrompt(
-      skill: skills.isEmpty ? '' : skills.first.markdown,
+      skill: skillMarkdown,
       history: history,
       question: question,
     );
@@ -379,7 +409,7 @@ class AppState extends ChangeNotifier {
       createdAt: DateTime.now(),
     );
     store.append(reply);
-    _logAgent('memory', 1, true, skills.isEmpty ? '普通对话（无 skill）' : question);
+    _logAgent('memory', 1, true, skillMarkdown.isEmpty ? '普通对话（模型默认预设）' : question);
     notifyListeners();
     return reply;
   }

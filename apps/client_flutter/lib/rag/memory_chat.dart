@@ -80,19 +80,10 @@ String buildMemoryPrompt({
   required String question,
 }) {
   final trimmed = skill.trim();
-  final buffer = StringBuffer()
-    ..writeln('你在扮演日记主人的「记忆助手」。');
-  if (trimmed.isEmpty) {
+  final buffer = StringBuffer();
+  if (trimmed.isNotEmpty) {
     buffer
-      ..writeln('当前没有蒸馏 skill：这是普通对话，不要假装记得日记细节。')
-      ..writeln('规则：')
-      ..writeln('1. 可以正常聊天，但不要编造日记里的日期、金额、人名；')
-      ..writeln('2. 用户问具体日记内容时，说明「还没有配置 skill / 无法回忆细节」；')
-      ..writeln('3. 用第一人称、口语化中文回答，控制在 200 字以内；')
-      ..writeln('4. 可以追问，但不要主动索取隐私。')
-      ..writeln();
-  } else {
-    buffer
+      ..writeln('你在扮演日记主人的「记忆助手」。')
       ..writeln('下面是从日记库蒸馏出的 skill，它是你唯一的人设与事实来源：')
       ..writeln('=== skill 开始 ===')
       ..writeln(trimmed)

@@ -91,6 +91,29 @@ class _MemoryPageState extends State<MemoryPage> {
         title: const Text('记忆对话'),
         centerTitle: false,
         actions: <Widget>[
+          PopupMenuButton<String>(
+            tooltip: '选择 skill',
+            icon: const Icon(Icons.tune),
+            onSelected: (value) {
+              state.setMemorySkill(value);
+              _load();
+            },
+            itemBuilder: (menuContext) => <PopupMenuEntry<String>>[
+              const PopupMenuItem<String>(
+                value: AppState.memoryModelPreset,
+                child: Text('模型默认预设'),
+              ),
+              const PopupMenuItem<String>(
+                value: AppState.memoryLatestSkill,
+                child: Text('最新 skill（自动）'),
+              ),
+              for (final skill in state.listSkills())
+                PopupMenuItem<String>(
+                  value: skill.name,
+                  child: Text(skill.name),
+                ),
+            ],
+          ),
           if (_messages.isNotEmpty)
             TextButton(
               onPressed: () {
