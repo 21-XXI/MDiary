@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -34,6 +36,8 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
     text: widget.entry.bodyMd,
   );
   final FocusNode _bodyFocus = FocusNode();
+  final ScrollController _bodyScroll = ScrollController();
+  final ScrollController _gutterScroll = ScrollController();
 
   EditorMode _mode = EditorMode.edit;
   List<Attachment> _attachments = const <Attachment>[];
@@ -45,6 +49,11 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
   void initState() {
     super.initState();
     _reloadAttachments();
+    _bodyScroll.addListener(() {
+      if (_gutterScroll.hasClients && _bodyScroll.hasClients) {
+        _gutterScroll.jumpTo(_bodyScroll.offset);
+      }
+    });
 
   }
 
@@ -55,6 +64,11 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
       _titleController.text = widget.entry.title;
       _bodyController.text = widget.entry.bodyMd;
       _reloadAttachments();
+    _bodyScroll.addListener(() {
+      if (_gutterScroll.hasClients && _bodyScroll.hasClients) {
+        _gutterScroll.jumpTo(_bodyScroll.offset);
+      }
+    });
     }
   }
 
@@ -63,6 +77,8 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
     _titleController.dispose();
     _bodyController.dispose();
     _bodyFocus.dispose();
+    _bodyScroll.dispose();
+    _gutterScroll.dispose();
     super.dispose();
   }
 
@@ -73,6 +89,11 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
   void _onTitleChanged(String value) {
     _state.draftChanged(title: value);
     _reloadAttachments();
+    _bodyScroll.addListener(() {
+      if (_gutterScroll.hasClients && _bodyScroll.hasClients) {
+        _gutterScroll.jumpTo(_bodyScroll.offset);
+      }
+    });
   }
 
   void _onBodyChanged(String value) {
@@ -486,66 +507,134 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
     );
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-      child: Focus(
-        onKeyEvent: (node, event) {
-          if (event is! KeyDownEvent) return KeyEventResult.ignored;
-          final control = HardwareKeyboard.instance.isControlPressed;
-          final shift = HardwareKeyboard.instance.isShiftPressed;
-          if (control && shift && event.logicalKey == LogicalKeyboardKey.keyV) {
-            _pasteScreenshot();
-            return KeyEventResult.handled;
-          }
-          if (control && event.logicalKey == LogicalKeyboardKey.keyF) {
-            showFindReplaceDialog(
-              context,
-              _bodyController,
-              () => _onBodyChanged(_bodyController.text),
-            );
-            return KeyEventResult.handled;
-          }
-          if (control && event.logicalKey == LogicalKeyboardKey.keyP) {
-            showCommandPalette(
-              context,
-              _bodyController,
-              onChanged: () => _onBodyChanged(_bodyController.text),
-            );
-            return KeyEventResult.handled;
-          }
-          if (event.logicalKey == LogicalKeyboardKey.tab) {
-            indentSelection(_bodyController, outdent: shift);
-            _onBodyChanged(_bodyController.text);
-            return KeyEventResult.handled;
-          }
-          if (event.logicalKey == LogicalKeyboardKey.enter &&
-              !shift &&
-              !control) {
-            final next = continueListOnEnter(_bodyController.value);
-            if (next != null) {
-              _bodyController.value = next;
-              _onBodyChanged(_bodyController.text);
-              return KeyEventResult.handled;
-            }
-          }
-          return KeyEventResult.ignored;
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final editorWidth = constraints.maxWidth - 46;
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              SizedBox(
+                width: 36,
+                child: ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _bodyController,
+                  builder: (context, value, _) {
+                    final lines = value.text.split('\n');
+                    final offset = value.selection.baseOffset.clamp(0, value.text.length);
+                    final currentLine =
+                        '\n'.allMatches(value.text.substring(0, offset)).length;
+                    final heights = <double>[];
+                    for (final line in lines) {
+                      final painter = TextPainter(
+                        text: TextSpan(text: line.isEmpty ? ' ' : line, style: style),
+                        textDirection: TextDirection.ltr,
+                      )..layout(maxWidth: math.max(editorWidth, 80));
+                      heights.add(math.max(painter.height, style.fontSize! * 1.6));
+                    }
+                    final children = <Widget>[];
+                    for (var i = 0; i < lines.length; i++) {
+                      children.add(
+                        SizedBox(
+                          height: heights[i],
+                          child: Align(
+                            alignment: Alignment.topRight,
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 2, right: 4),
+                              child: Text(
+                                '${i + 1}',
+                                style: style.copyWith(
+                                  fontSize: (style.fontSize ?? 14) * 0.8,
+                                  color: i == currentLine
+                                      ? theme.colorScheme.primary
+                                      : theme.colorScheme.onSurfaceVariant
+                                            .withValues(alpha: 0.45),
+                                  fontWeight: i == currentLine
+                                      ? FontWeight.w700
+                                      : FontWeight.w400,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    return SingleChildScrollView(
+                      controller: _gutterScroll,
+                      physics: const NeverScrollableScrollPhysics(),
+                      child: Column(children: children),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Focus(
+                  onKeyEvent: (node, event) {
+                    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+                    final control = HardwareKeyboard.instance.isControlPressed;
+                    final shift = HardwareKeyboard.instance.isShiftPressed;
+                    if (control &&
+                        shift &&
+                        event.logicalKey == LogicalKeyboardKey.keyV) {
+                      _pasteScreenshot();
+                      return KeyEventResult.handled;
+                    }
+                    if (control && event.logicalKey == LogicalKeyboardKey.keyF) {
+                      showFindReplaceDialog(
+                        context,
+                        _bodyController,
+                        () => _onBodyChanged(_bodyController.text),
+                      );
+                      return KeyEventResult.handled;
+                    }
+                    if (control && event.logicalKey == LogicalKeyboardKey.keyP) {
+                      showCommandPalette(
+                        context,
+                        _bodyController,
+                        onChanged: () => _onBodyChanged(_bodyController.text),
+                      );
+                      return KeyEventResult.handled;
+                    }
+                    if (event.logicalKey == LogicalKeyboardKey.tab) {
+                      indentSelection(_bodyController, outdent: shift);
+                      _onBodyChanged(_bodyController.text);
+                      return KeyEventResult.handled;
+                    }
+                    if (event.logicalKey == LogicalKeyboardKey.enter &&
+                        !shift &&
+                        !control) {
+                      final next = continueListOnEnter(_bodyController.value);
+                      if (next != null) {
+                        _bodyController.value = next;
+                        _onBodyChanged(_bodyController.text);
+                        return KeyEventResult.handled;
+                      }
+                    }
+                    return KeyEventResult.ignored;
+                  },
+                  child: TextField(
+                    key: const Key('editor-body'),
+                    controller: _bodyController,
+                    focusNode: _bodyFocus,
+                    scrollController: _bodyScroll,
+                    onChanged: _onBodyChanged,
+                    maxLines: null,
+                    expands: true,
+                    textAlignVertical: TextAlignVertical.top,
+                    keyboardType: TextInputType.multiline,
+                    inputFormatters: <TextInputFormatter>[AutoPairFormatter()],
+                    style: style,
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                      hintText: '写点什么…支持 Markdown，输入后自动保存',
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
         },
-        child: TextField(
-          key: const Key('editor-body'),
-          controller: _bodyController,
-          focusNode: _bodyFocus,
-          onChanged: _onBodyChanged,
-          maxLines: null,
-          expands: true,
-          textAlignVertical: TextAlignVertical.top,
-          keyboardType: TextInputType.multiline,
-          inputFormatters: <TextInputFormatter>[AutoPairFormatter()],
-          style: style,
-          decoration: const InputDecoration(
-            border: InputBorder.none,
-            isDense: true,
-            contentPadding: EdgeInsets.zero,
-            hintText: '写点什么…支持 Markdown，输入后自动保存',
-          ),
-        ),
       ),
     );
   }
@@ -583,6 +672,11 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
       _onBodyChanged(updated.bodyMd);
     }
     _reloadAttachments();
+    _bodyScroll.addListener(() {
+      if (_gutterScroll.hasClients && _bodyScroll.hasClients) {
+        _gutterScroll.jumpTo(_bodyScroll.offset);
+      }
+    });
   }
 
   Widget _buildAttachmentStrip(BuildContext context) {
