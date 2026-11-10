@@ -11,6 +11,7 @@ import '../ui/month_calendar.dart';
 import '../ui/widgets.dart';
 import 'entry_editor_page.dart';
 import 'rag_page.dart';
+import 'segment_page.dart';
 import 'skill_page.dart';
 import 'settings_page.dart';
 import 'star_map/star_map_page.dart';
@@ -209,6 +210,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 tooltip: 'RAG（问答 / 日报 / 档案）',
                 onPressed: _openRag,
                 icon: const Icon(Icons.auto_awesome_outlined),
+              ),
+              _HeaderIconButton(
+                tooltip: '分词导入',
+                onPressed: () => _openPage(const SegmentPage()),
+                icon: const Icon(Icons.call_split),
               ),
               _HeaderIconButton(
                 tooltip: '星图',

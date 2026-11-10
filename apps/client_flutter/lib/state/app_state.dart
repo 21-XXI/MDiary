@@ -15,6 +15,7 @@ import '../core/emoji.dart';
 import '../core/secret_store.dart';
 import '../rag/answer.dart';
 import '../rag/chat.dart';
+import '../rag/diary_segmenter.dart';
 import '../rag/cloud_client.dart';
 import '../rag/embedder.dart';
 import '../rag/model_registry.dart';
@@ -198,6 +199,108 @@ class AppState extends ChangeNotifier {
 
   void setRoleProfile(ModelRole role, String? profileId) =>
       saveModelRegistry(_modelRegistry.withRole(role, profileId));
+
+  /// 用某个角色的模型做一次非流式补全（分词 / 记忆对话等）。
+  Future<String> completeForRole(ModelRole role, String prompt) async {
+    final profile = _modelRegistry.profileFor(role);
+    if (profile != null) {
+      if (profile.isCloud) {
+        final key = SecretStore.unprotect(profile.apiKeyCipher);
+        if (key != null && key.isNotEmpty) {
+          return CloudCompleter(
+            CloudConfig(
+              baseUrl: profile.baseUrl,
+              model: profile.model,
+              apiKey: key,
+            ),
+          ).complete(prompt);
+        }
+      } else {
+        return OllamaAnswerer(
+          model: profile.model,
+          baseUrl: profile.baseUrl,
+        ).complete(prompt);
+      }
+    }
+    return OllamaAnswerer(
+      model: _ragSettings.generateModel,
+      baseUrl: _ragSettings.baseUrl,
+    ).complete(prompt);
+  }
+
+  /// 读取文件夹并让分词模型给出切分计划（不落库）。
+  Future<SegmentPlan> planSegmentation(String directory) {
+    return DiarySegmenter(
+      complete: (prompt) => completeForRole(ModelRole.segment, prompt),
+    ).planDirectory(directory);
+  }
+
+  /// 新建库 → 把切分结果写成日期文件夹 → 导入 → 切换过去。
+  Future<ImportResult> importSegmentPlan(
+    SegmentPlan plan, {
+    required String sourceDirectory,
+    required String libraryName,
+  }) async {
+    final root = AppPaths.isInitialized ? AppPaths.root.path : dataRootPath;
+    final parent = p.join(root, 'libraries');
+    Directory(parent).createSync(recursive: true);
+    final dir = _uniqueDirectory(parent, _safeName(libraryName));
+    Directory(dir).createSync(recursive: true);
+    await switchLibrary(dir);
+
+    final staging = Directory(p.join(root, 'tmp', 'segment-${DateTime.now().millisecondsSinceEpoch}'))
+      ..createSync(recursive: true);
+    try {
+      final source = Directory(sourceDirectory);
+      for (final day in plan.days) {
+        final date = day.date;
+        final stamp =
+            '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+        final folder = Directory(p.join(staging.path, stamp))..createSync(recursive: true);
+        final buffer = StringBuffer()
+          ..writeln('---')
+          ..writeln('title: ${day.title}')
+          ..writeln('date: $stamp')
+          ..writeln('tags: [${day.tags.join(', ')}]')
+          ..writeln('---')
+          ..writeln()
+          ..writeln(day.body.trim());
+        for (final name in day.attachments) {
+          final file = _findFile(source, name);
+          if (file == null) continue;
+          file.copySync(p.join(folder.path, name));
+          buffer
+            ..writeln()
+            ..writeln('![$name]($name)');
+        }
+        File(p.join(folder.path, '当期.md')).writeAsStringSync(
+          buffer.toString(),
+          flush: true,
+        );
+      }
+      final result = await markdownIo.importDirectory(
+        staging.path,
+        deviceId: deviceId,
+      );
+      await refresh();
+      return result;
+    } finally {
+      if (staging.existsSync()) staging.deleteSync(recursive: true);
+    }
+  }
+
+  static String _safeName(String value) {
+    final cleaned = value.replaceAll(RegExp(r'[\\/:*?"<>|]'), '-').trim();
+    return cleaned.isEmpty ? '导入库' : cleaned;
+  }
+
+  static File? _findFile(Directory root, String name) {
+    if (!root.existsSync()) return null;
+    for (final entity in root.listSync(recursive: true, followLinks: false)) {
+      if (entity is File && p.basename(entity.path) == name) return entity;
+    }
+    return null;
+  }
 
   void updateRagSettings(RagSettings next) {
     final embedChanged =
