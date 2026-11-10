@@ -434,8 +434,10 @@ class AppState extends ChangeNotifier {
     Directory(dir).createSync(recursive: true);
     await switchLibrary(dir);
 
-    final staging = Directory(p.join(root, 'tmp', 'segment-${DateTime.now().millisecondsSinceEpoch}'))
+    final stagingRoot = Directory(p.join(root, 'tmp', 'segment-${DateTime.now().millisecondsSinceEpoch}'))
       ..createSync(recursive: true);
+    final staging = Directory(p.join(stagingRoot.path, 'content'))..createSync();
+    final notesDir = Directory(p.join(stagingRoot.path, 'notes'))..createSync();
     try {
       final source = Directory(sourceDirectory);
       for (final day in plan.days) {
@@ -451,6 +453,15 @@ class AppState extends ChangeNotifier {
           ..writeln('---')
           ..writeln()
           ..writeln(day.body.trim());
+        for (final note in day.notes) {
+          buffer
+            ..writeln()
+            ..writeln('- [${note.filename}](notes/${note.filename})');
+          File(p.join(notesDir.path, '$stamp-${note.filename}')).writeAsStringSync(
+            note.body,
+            flush: true,
+          );
+        }
         for (final name in day.attachments) {
           final file = _findFile(source, name);
           if (file == null) continue;
@@ -468,10 +479,44 @@ class AppState extends ChangeNotifier {
         staging.path,
         deviceId: deviceId,
       );
+      // 附加笔记作为附件挂到当天主文件，并把 notes/ 链接改成 assets/<sha>.md。
+      for (final day in plan.days) {
+        if (day.notes.isEmpty) continue;
+        Entry? entry;
+        for (final candidate in entryRepo.query()) {
+          if (candidate.isDeleted) continue;
+          if (candidate.entryDate.year == day.date.year &&
+              candidate.entryDate.month == day.date.month &&
+              candidate.entryDate.day == day.date.day) {
+            entry = candidate;
+            break;
+          }
+        }
+        if (entry == null) continue;
+        var body = entry.bodyMd;
+        for (final note in day.notes) {
+          final blob = await store.storeBytes(
+            Uint8List.fromList(utf8.encode(note.body)),
+            note.filename,
+          );
+          attachmentRepo.insert(
+            entryId: entry.id,
+            sha256: blob.sha256,
+            filename: note.filename,
+            mime: 'text/markdown',
+            sizeBytes: blob.sizeBytes,
+          );
+          body = body.replaceAll(
+            'notes/${note.filename}',
+            'assets/${blob.sha256}.md',
+          );
+        }
+        entryRepo.saveContent(entry.id, body: body);
+      }
       await refresh();
       return result;
     } finally {
-      if (staging.existsSync()) staging.deleteSync(recursive: true);
+      if (stagingRoot.existsSync()) stagingRoot.deleteSync(recursive: true);
     }
   }
 

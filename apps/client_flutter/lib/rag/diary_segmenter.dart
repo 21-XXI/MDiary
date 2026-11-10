@@ -3,6 +3,14 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+/// 一天里的一篇附加笔记。
+class SegmentNote {
+  const SegmentNote({required this.filename, required this.body});
+
+  final String filename;
+  final String body;
+}
+
 /// 分词后的一天。
 class SegmentDay {
   const SegmentDay({
@@ -11,6 +19,7 @@ class SegmentDay {
     required this.body,
     required this.tags,
     required this.attachments,
+    this.notes = const <SegmentNote>[],
   });
 
   final DateTime date;
@@ -18,6 +27,7 @@ class SegmentDay {
   final String body;
   final List<String> tags;
   final List<String> attachments;
+  final List<SegmentNote> notes;
 
   int get chars => body.replaceAll(RegExp(r'\s'), '').length;
 }
@@ -153,6 +163,24 @@ class DiarySegmenter {
           if (!attachments.contains(name)) attachments.add(name);
         }
       }
+      final notes = <SegmentNote>[];
+      final rawNotes = item['notes'];
+      if (rawNotes is List) {
+        for (final rawNote in rawNotes) {
+          if (rawNote is! Map) continue;
+          final filename = p.basename('${rawNote['filename'] ?? ''}'.trim());
+          final body = '${rawNote['body'] ?? ''}'.trim();
+          if (filename.isEmpty || body.isEmpty) continue;
+          notes.add(
+            SegmentNote(
+              filename: filename.toLowerCase().endsWith('.md')
+                  ? filename
+                  : '$filename.md',
+              body: body,
+            ),
+          );
+        }
+      }
       days.add(
         SegmentDay(
           date: date,
@@ -162,6 +190,7 @@ class DiarySegmenter {
           body: body,
           tags: tags,
           attachments: attachments,
+          notes: notes,
         ),
       );
     }

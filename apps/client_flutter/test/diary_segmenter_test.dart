@@ -70,4 +70,14 @@ void main() {
       throwsA(isA<SegmenterException>()),
     );
   });
+
+  test('解析 notes（附加笔记）并补 .md 后缀', () {
+    const raw = '{"days":[{"date":"2026-11-06","body":"主",'
+        '"notes":[{"filename":"详细行程","body":"细节"},'
+        '{"filename":"x.md","body":""}]}]}';
+    final plan = DiarySegmenter.parsePlan(raw);
+    expect(plan.days.single.notes, hasLength(1));
+    expect(plan.days.single.notes.single.filename, '详细行程.md');
+    expect(plan.days.single.notes.single.body, '细节');
+  });
 }
