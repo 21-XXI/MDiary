@@ -44,7 +44,7 @@
 - 配置列表（名称、模型、地址/云端），可添加 / 编辑 / 删除；
 - 删除配置会自动清掉引用它的角色；
 - 五个角色各一个下拉：未设置时走旧设置回退；
-- 云端 Key 仍用 Windows DPAPI 加密后写 `api_key`。
+- 云端 Key 只存在云端配置的 `api_key`（DPAPI 密文）；旧 `settings.json` 里的 Key 仅作迁移回退，`setCloudApiKey` 现在写模型配置。
 
 ## 安全与边界
 

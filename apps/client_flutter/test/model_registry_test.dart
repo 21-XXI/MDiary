@@ -112,6 +112,20 @@ void main() {
       expect(state.profileFor(ModelRole.chat), isNotNull);
     });
 
+    test('云端 Key 统一存到模型配置，cloudConfig 能取到', () async {
+      state.setCloudApiKey('sk-test');
+      final profile = state.cloudProfile;
+      expect(profile, isNotNull);
+      expect(profile!.isCloud, isTrue);
+      expect(profile.apiKeyCipher, isNotEmpty);
+      expect(state.ragSettings.cloudApiKeyCipher, isEmpty);
+
+      state.updateRagSettings(state.ragSettings.copyWith(cloudEnabled: true));
+      final config = state.cloudConfig;
+      expect(config, isNotNull);
+      expect(config!.apiKey, 'sk-test');
+    });
+
     test('改角色/新增配置后重新打开仍在', () async {
       final profile = ModelProfile(
         id: 'custom',

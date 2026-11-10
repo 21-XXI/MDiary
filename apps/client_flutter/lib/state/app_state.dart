@@ -1141,15 +1141,37 @@ class AppState extends ChangeNotifier {
         ),
   );
 
+  /// 当前云端的配置（优先「模型」里的云端配置）。
+  ModelProfile? get cloudProfile {
+    final generate = _modelRegistry.profileFor(ModelRole.generate);
+    if (generate != null && generate.isCloud) return generate;
+    for (final profile in _modelRegistry.profiles) {
+      if (profile.isCloud) return profile;
+    }
+    return null;
+  }
+
   /// 云端配置；未开启或没有 Key 时为 null（走本地）。
   CloudConfig? get cloudConfig {
     if (!_ragSettings.cloudEnabled) return null;
-    final key = SecretStore.unprotect(_ragSettings.cloudApiKeyCipher);
-    if (key == null || key.trim().isEmpty) return null;
+    final profile = cloudProfile;
+    if (profile != null) {
+      final key = SecretStore.unprotect(profile.apiKeyCipher);
+      if (key != null && key.trim().isNotEmpty) {
+        return CloudConfig(
+          baseUrl: profile.baseUrl,
+          model: profile.model,
+          apiKey: key.trim(),
+        );
+      }
+    }
+    // 兼容旧 settings.json 里的 Key（迁移后会写进模型配置）。
+    final legacy = SecretStore.unprotect(_ragSettings.cloudApiKeyCipher);
+    if (legacy == null || legacy.trim().isEmpty) return null;
     return CloudConfig(
       baseUrl: _ragSettings.cloudBaseUrl,
       model: _ragSettings.cloudModel,
-      apiKey: key.trim(),
+      apiKey: legacy.trim(),
     );
   }
 
@@ -1259,13 +1281,20 @@ class AppState extends ChangeNotifier {
 
   /// 保存云端 API Key（DPAPI 加密后写 settings.json）。
   void setCloudApiKey(String plain) {
-    updateRagSettings(
-      _ragSettings.copyWith(
-        cloudApiKeyCipher: plain.trim().isEmpty
-            ? ''
-            : SecretStore.protect(plain.trim()),
-      ),
-    );
+    final cipher = plain.trim().isEmpty
+        ? ''
+        : SecretStore.protect(plain.trim());
+    final existing = cloudProfile;
+    final next = (existing ??
+            ModelProfile(
+              id: 'cloud-generate',
+              name: '云端 · 生成',
+              provider: 'openai',
+              baseUrl: _ragSettings.cloudBaseUrl,
+              model: _ragSettings.cloudModel,
+            ))
+        .copyWith(apiKeyCipher: cipher);
+    saveModelRegistry(_modelRegistry.withProfile(next));
   }
 
   /// 测试云端连通性；成功返回 null，失败返回原因。
