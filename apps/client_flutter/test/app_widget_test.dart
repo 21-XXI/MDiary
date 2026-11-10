@@ -17,6 +17,8 @@ import 'package:mdiary/data/markdown_io.dart';
 import 'package:mdiary/data/meta_repository.dart';
 import 'package:mdiary/data/models.dart';
 import 'package:mdiary/features/settings_page.dart';
+import 'package:mdiary/features/star_map/cosmos_layout.dart';
+import 'package:mdiary/features/star_map/star_map_page.dart';
 import 'package:mdiary/features/star_map/star_map_layout.dart';
 import 'package:mdiary/state/app_state.dart';
 import 'package:mdiary/ui/markdown_view.dart';
@@ -573,6 +575,8 @@ void main() {
   }, skip: skipWidgetTests);
 
   testWidgets('星图：展示日记与共用附件，点日记星回到编辑器', (tester) async {
+    StarMapPage.disableAnimations = true;
+    addTearDown(() => StarMapPage.disableAnimations = false);
     final first = state.entryRepo.create(
       deviceId: 'dev',
       date: DateTime(2026, 11, 1),
@@ -605,24 +609,34 @@ void main() {
     }
     expect(tester.takeException(), isNull);
 
-    final map = buildStarMap(
+    // 旧布局仍保留给几何单测；界面已换成星座/星云视图。
+    final legacy = buildStarMap(
       entries: state.allEntries,
       attachments: state.allAttachments,
       period: StarPeriod.month,
     );
-    expect(map.attachments.single.refCount, 2);
+    expect(legacy.attachments.single.refCount, 2);
 
-    // 点第一颗日记星 -> 回到主界面并选中它
-    final viewer = find.byType(InteractiveViewer);
-    final origin = tester.getTopLeft(viewer);
-    await tester.tapAt(origin + map.entries.first.center);
+    final canvas = find.byKey(const Key('star-map-canvas'));
+    final size = tester.getSize(canvas);
+    final layout = buildCosmosLayout(
+      entries: state.allEntries,
+      attachments: state.allAttachments,
+      period: StarPeriod.month,
+      size: size,
+    );
+    final star = layout.stars.firstWhere((item) => item.entry != null);
+
+    await tester.tapAt(tester.getTopLeft(canvas) + star.center);
     await tester.pumpAndSettle();
 
     expect(find.text('星图'), findsNothing, reason: '应已返回主界面');
-    expect(state.selected?.id, map.entries.first.entry.id);
+    expect(state.selected?.id, star.entry!.id);
   }, skip: skipWidgetTests);
 
   testWidgets('星图：切换全部/年/月/周不报错', (tester) async {
+    StarMapPage.disableAnimations = true;
+    addTearDown(() => StarMapPage.disableAnimations = false);
     await state.createEntry(date: DateTime(2026, 11, 1));
     await pumpApp(tester);
     await tester.tap(find.byTooltip('星图'));

@@ -598,7 +598,7 @@ class _StatusBar extends StatelessWidget {
           ),
           const SizedBox(width: 14),
           Text(
-            'v2.5.1',
+            'v2.6.0',
             style: theme.textTheme.labelSmall?.copyWith(
               color: scheme.onSurfaceVariant,
             ),

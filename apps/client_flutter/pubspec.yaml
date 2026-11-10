@@ -1,7 +1,7 @@
 name: mdiary
 description: 跨平台 Markdown 日记程序（v1.0 Windows 桌面）
 publish_to: 'none'
-version: 2.5.1+11
+version: 2.6.0+12
 
 environment:
   sdk: ^3.13.0

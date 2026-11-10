@@ -1,7 +1,7 @@
 # v2.3 验收清单
 
 对应 `docs/project.md` 第 3/4 节与 `docs/rag.md`。执行环境：Windows 10/11 x64，
-`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.5.1**（2026-11-10，含 2.5.1 表情短代码）。
+`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.6.0**（2026-11-10，含 2.6 星图）。
 
 > 状态列：`PASS` / `FAIL`（附现象）/ `BLOCKED`；标「自动」的由 `flutter test` 覆盖。
 > v1.1.1 及更早的验收记录见 git 历史中的 `acceptance-v1.1.md`。
@@ -11,10 +11,10 @@
 | # | 项 | 命令 | 期望 | 状态 |
 |---|---|---|---|---|
 | A1 | 静态分析 | `flutter analyze` | 0 issue | **PASS**（2026-11-06，0 issue） |
-| A2 | 单元/界面测试 | `flutter test` | 全绿 | **PASS**（258 passed） |
+| A2 | 单元/界面测试 | `flutter test` | 全绿 | **PASS**（264 passed） |
 | A3 | Release 构建 | `scripts\build.ps1` | 产出 exe | **PASS**（Release 目录 21.9 MB） |
 | A4 | 冒烟 | `scripts\smoke.ps1` | 启动建库 + 单实例 | **PASS**（verify.ps1 自动执行） |
-| A5 | 交付校验 | `SHA256SUMS.txt` | 与 zip 一致 | **PASS**（`MDiary-2.5.1-windows-x64.zip`） |
+| A5 | 交付校验 | `SHA256SUMS.txt` | 与 zip 一致 | **PASS**（`MDiary-2.6.0-windows-x64.zip`） |
 
 ## B. 书写 / 存储（v1.1.1 能力回归）
 
@@ -173,9 +173,22 @@
 | O5 | 持久化 | 重启/重开库 | 自定义仍在 | **自动**：`emoji_test` |
 | O6 | 面板选择 | 打开「表情」点 smile | 插入 `:smile: ` | **自动**：`emoji_test` |
 
-## P. 汇总
+## P. v2.6 星图
 
-- 自动化：`flutter analyze` 0 issue、`flutter test` **258 passed**、构建成功、冒烟通过。
-- 交付：`dist/MDiary-2.5.1-windows-x64/`、同名 zip、`SHA256SUMS.txt`。
+| # | 项 | 操作 | 期望 | 状态 |
+|---|---|---|---|---|
+| P1 | 周视图 | 切到「周」 | 7 个槽位、连续星座线、附件轨道 | **自动**：`star_map_cosmos_test` |
+| P2 | 月视图 | 切到「月」 | 按当月天数排布，空白日为暗点 | **自动**：`star_map_cosmos_test` |
+| P3 | 年视图 | 切到「年」 | 12 个星团连成环 | **自动**：`star_map_cosmos_test` |
+| P4 | 全部 | 切到「全部」 | 按年份分组星云 | **自动**：`star_map_cosmos_test` |
+| P5 | 位置稳定 | 反复进出 | 同一天位置不变 | **自动**：`star_map_cosmos_test` |
+| P6 | 点星 | 点一颗有日记的星 | 返回主界面并打开 | **自动**：`app_widget_test` |
+| P7 | 滚轮缩放 | 上/下滚 | 尺度切换、不报错 | 人工 |
+| P8 | 附件公转 | 月视图看有附件星 | 小点绕星旋转 | 人工 |
+
+## Q. 汇总
+
+- 自动化：`flutter analyze` 0 issue、`flutter test` **264 passed**、构建成功、冒烟通过。
+- 交付：`dist/MDiary-2.6.0-windows-x64/`、同名 zip、`SHA256SUMS.txt`。
 - 待人工确认：B3、G1（真机点击）、H7、H10。
 - 已知限制：问答无多轮记忆；embedding 仅本地；模型质量取决于本机模型。
