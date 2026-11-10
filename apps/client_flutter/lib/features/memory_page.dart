@@ -118,7 +118,7 @@ class _MemoryPageState extends State<MemoryPage> {
                 Expanded(
                   child: Text(
                     skill == null
-                        ? '还没有蒸馏 skill：先到「蒸馏」页生成一份'
+                        ? '未配置 skill：进行普通对话（不检索日记）'
                         : '记忆来源：$skill（只用 skill，不检索日记）',
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,

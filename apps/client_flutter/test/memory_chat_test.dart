@@ -85,11 +85,10 @@ void main() {
       if (sandbox.existsSync()) sandbox.deleteSync(recursive: true);
     });
 
-    test('没有 skill 时明确报错', () async {
-      await expectLater(
-        state.askMemory('你好'),
-        throwsA(isA<StateError>()),
-      );
+    test('没有 skill 时走普通对话，不报错', () async {
+      final reply = await state.askMemory('你好');
+      expect(reply.text, '我记得那次旅行。');
+      expect(state.loadMemoryChat(), hasLength(2));
     });
 
     test('生成 skill 后可对话，消息按库持久化', () async {

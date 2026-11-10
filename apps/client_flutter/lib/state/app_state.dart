@@ -356,12 +356,9 @@ class AppState extends ChangeNotifier {
       throw StateError('Agent 权限关闭：读取 skill');
     }
     final skills = listSkills();
-    if (skills.isEmpty) {
-      throw StateError('还没有蒸馏 skill：先到「蒸馏」页生成一份');
-    }
     final history = loadMemoryChat();
     final prompt = buildMemoryPrompt(
-      skill: skills.first.markdown,
+      skill: skills.isEmpty ? '' : skills.first.markdown,
       history: history,
       question: question,
     );
@@ -382,7 +379,7 @@ class AppState extends ChangeNotifier {
       createdAt: DateTime.now(),
     );
     store.append(reply);
-    _logAgent('memory', 1, true, question);
+    _logAgent('memory', 1, true, skills.isEmpty ? '普通对话（无 skill）' : question);
     notifyListeners();
     return reply;
   }

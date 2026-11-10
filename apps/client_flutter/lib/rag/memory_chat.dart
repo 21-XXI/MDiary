@@ -79,19 +79,32 @@ String buildMemoryPrompt({
   required List<MemoryMessage> history,
   required String question,
 }) {
+  final trimmed = skill.trim();
   final buffer = StringBuffer()
-    ..writeln('你在扮演日记主人的「记忆助手」。')
-    ..writeln('下面是从日记库蒸馏出的 skill，它是你唯一的人设与事实来源：')
-    ..writeln('=== skill 开始 ===')
-    ..writeln(skill)
-    ..writeln('=== skill 结束 ===')
-    ..writeln()
-    ..writeln('规则：')
-    ..writeln('1. 只根据 skill 与对话回答，不要编造具体日期、金额、人名；')
-    ..writeln('2. skill 里没有的信息，直接说「skill 里没有提到」，不要猜；')
-    ..writeln('3. 用第一人称、口语化中文回答，控制在 200 字以内；')
-    ..writeln('4. 可以追问，但不要主动索取隐私。')
-    ..writeln();
+    ..writeln('你在扮演日记主人的「记忆助手」。');
+  if (trimmed.isEmpty) {
+    buffer
+      ..writeln('当前没有蒸馏 skill：这是普通对话，不要假装记得日记细节。')
+      ..writeln('规则：')
+      ..writeln('1. 可以正常聊天，但不要编造日记里的日期、金额、人名；')
+      ..writeln('2. 用户问具体日记内容时，说明「还没有配置 skill / 无法回忆细节」；')
+      ..writeln('3. 用第一人称、口语化中文回答，控制在 200 字以内；')
+      ..writeln('4. 可以追问，但不要主动索取隐私。')
+      ..writeln();
+  } else {
+    buffer
+      ..writeln('下面是从日记库蒸馏出的 skill，它是你唯一的人设与事实来源：')
+      ..writeln('=== skill 开始 ===')
+      ..writeln(trimmed)
+      ..writeln('=== skill 结束 ===')
+      ..writeln()
+      ..writeln('规则：')
+      ..writeln('1. 只根据 skill 与对话回答，不要编造具体日期、金额、人名；')
+      ..writeln('2. skill 里没有的信息，直接说「skill 里没有提到」，不要猜；')
+      ..writeln('3. 用第一人称、口语化中文回答，控制在 200 字以内；')
+      ..writeln('4. 可以追问，但不要主动索取隐私。')
+      ..writeln();
+  }
   if (history.isNotEmpty) {
     buffer.writeln('最近的对话：');
     for (final message in history.reversed.take(20).toList().reversed) {
