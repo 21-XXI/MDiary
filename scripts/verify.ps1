@@ -1,4 +1,4 @@
-# MDiary 提交前校验：analyze -> test -> build（任一失败即中止）
+﻿# MDiary 提交前校验：analyze -> test -> build（任一失败即中止）
 #
 # 用法：powershell -ExecutionPolicy Bypass -File scripts\verify.ps1 [-SkipBuild] [-SkipTest] [-SkipSmoke]
 param(
