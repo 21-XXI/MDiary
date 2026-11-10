@@ -211,7 +211,7 @@ class AppState extends ChangeNotifier {
   }) async {
     final bytes = Uint8List.fromList(utf8.encode(text));
     final blob = await store.storeBytes(bytes, filename);
-    const mime = 'text/markdown';
+    const mime = 'text/x-mdiary-note';
     final current = entryRepo.findById(entry.id) ?? entry;
     Attachment attachment;
     String body;
@@ -503,7 +503,7 @@ class AppState extends ChangeNotifier {
             entryId: entry.id,
             sha256: blob.sha256,
             filename: note.filename,
-            mime: 'text/markdown',
+            mime: 'text/x-mdiary-note',
             sizeBytes: blob.sizeBytes,
           );
           body = body.replaceAll(

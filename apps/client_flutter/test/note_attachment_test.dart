@@ -46,7 +46,7 @@ void main() {
       text: '# 详细\n\n第一天。',
     );
     expect(note.filename, '详细行程.md');
-    expect(note.mime, 'text/markdown');
+    expect(note.mime, 'text/x-mdiary-note');
     expect(state.attachmentText(note), contains('第一天'));
 
     final updated = state.entryRepo.findById(entry.id)!;
