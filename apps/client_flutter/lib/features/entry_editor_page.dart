@@ -528,11 +528,21 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
           spacing: 12,
           runSpacing: 2,
           children: <Widget>[
-            Text(
-              '${formatDayLabel(widget.entry.entryDate)} · $chars 字',
-              style: style,
+            Tooltip(
+              message:
+                  '字数按字符统计：不计空格与换行，Markdown 标记（#、*、[] 等）也计入。\n'
+                  '当前 $chars 字。',
+              child: Text(
+                '${formatDayLabel(widget.entry.entryDate)} · $chars 字',
+                style: style,
+              ),
             ),
-            Text('最后保存 ${formatDateTime(updated)}', style: style),
+            Tooltip(
+              message:
+                  '自动保存：停止输入约 0.8 秒后写入数据库；切换日记或关闭窗口前也会保存。\n'
+                  '最后保存 ${formatDateTime(updated)}。',
+              child: Text('最后保存 ${formatDateTime(updated)}', style: style),
+            ),
           ],
         ),
       ),
