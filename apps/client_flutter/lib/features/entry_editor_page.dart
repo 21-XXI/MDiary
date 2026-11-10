@@ -6,6 +6,7 @@ import '../core/theme.dart';
 import '../data/models.dart';
 import '../state/app_state.dart';
 import '../ui/markdown_view.dart';
+import 'child_note_page.dart';
 import '../ui/emoji_picker.dart';
 import '../ui/markdown_editor.dart';
 import '../ui/symbol_palette.dart';
@@ -402,7 +403,7 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
                       icon: const Icon(Icons.functions),
                     ),
                     IconButton(
-                      tooltip: '附加 md 笔记',
+                      tooltip: '添加子 md 文件',
                       onPressed: _busy ? null : () => _showNoteDialog(),
                       icon: const Icon(Icons.note_add_outlined),
                     ),
@@ -602,83 +603,30 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
   }
 
   Future<void> _showNoteDialog({Attachment? existing}) async {
-    final nameController = TextEditingController(
-      text: existing?.filename ?? '附加笔记.md',
-    );
-    final textController = MarkdownEditingController(
-      text: existing == null ? '' : (_state.attachmentText(existing) ?? ''),
-    );
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(existing == null ? '附加 md 笔记' : '编辑 ${existing.filename}'),
-        content: SizedBox(
-          width: 760,
-          height: 520,
-          child: Column(
-            children: <Widget>[
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: '文件名',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: TextField(
-                  controller: textController,
-                  maxLines: null,
-                  expands: true,
-                  textAlignVertical: TextAlignVertical.top,
-                  style: AppTheme.editorStyle(
-                    _state.editorFontSize,
-                    Theme.of(dialogContext).colorScheme.onSurface,
-                    fontFamily: _state.editorFont,
-                  ),
-                  decoration: const InputDecoration(
-                    hintText: '写附加笔记…保存后会作为附件链接到主文件',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-            ],
-          ),
+    final result = await Navigator.of(context).push<Map<String, String>>(
+      MaterialPageRoute<Map<String, String>>(
+        builder: (_) => ChildNotePage(
+          initialName: existing?.filename ?? '子笔记.md',
+          initialText: existing == null
+              ? ''
+              : (_state.attachmentText(existing) ?? ''),
         ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('保存'),
-          ),
-        ],
       ),
     );
-    if (saved == true) {
-      final filename = nameController.text.trim().isEmpty
-          ? '附加笔记.md'
-          : nameController.text.trim();
-      await _state.saveMarkdownNote(
-        widget.entry,
-        filename: filename.endsWith('.md') ? filename : '$filename.md',
-        text: textController.text,
-        existing: existing,
-      );
-      if (mounted) {
-        final updated = _state.entryRepo.findById(widget.entry.id);
-        if (updated != null) {
-          _bodyController.text = updated.bodyMd;
-          _onBodyChanged(updated.bodyMd);
-        }
-        _reloadAttachments();
-      }
+    if (result == null) return;
+    await _state.saveMarkdownNote(
+      widget.entry,
+      filename: result['name'] ?? '子笔记.md',
+      text: result['text'] ?? '',
+      existing: existing,
+    );
+    if (!mounted) return;
+    final updated = _state.entryRepo.findById(widget.entry.id);
+    if (updated != null) {
+      _bodyController.text = updated.bodyMd;
+      _onBodyChanged(updated.bodyMd);
     }
-    nameController.dispose();
-    textController.dispose();
+    _reloadAttachments();
   }
 
   Widget _buildAttachmentStrip(BuildContext context) {
@@ -696,7 +644,11 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
           final missing = local == null;
           return InputChip(
             avatar: Icon(
-              missing ? Icons.link_off : Icons.attachment,
+              missing
+                  ? Icons.link_off
+                  : (attachment.filename.endsWith('.md')
+                        ? Icons.description_outlined
+                        : Icons.attachment),
               size: 16,
               color: missing
                   ? theme.colorScheme.error
