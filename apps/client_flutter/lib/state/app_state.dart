@@ -246,6 +246,8 @@ class AppState extends ChangeNotifier {
       body = '${entry.bodyMd.trimRight()}\n- [$filename](assets/${blob.sha256}.md)\n';
     }
     entryRepo.saveContent(entry.id, body: body);
+    // 编辑会生成新 blob，旧 blob 不再被引用：顺手清理。
+    attachmentRepo.deleteUnreferencedBlobs();
     await refresh();
     // 附加 md 也进 RAG：先重建索引（索引是增量/可重建的，失败不影响保存）。
     unawaited(() async {

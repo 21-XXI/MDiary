@@ -78,6 +78,11 @@ void main() {
     final updated = state.entryRepo.findById(entry.id)!;
     expect(updated.bodyMd, contains('assets/${edited.sha256}.md'));
     expect(updated.bodyMd, isNot(contains('assets/${note.sha256}.md')));
+    expect(
+      state.attachmentRepo.blobCount(),
+      1,
+      reason: '编辑后旧 blob 应被清理',
+    );
   });
 }
 
