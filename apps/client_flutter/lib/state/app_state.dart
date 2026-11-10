@@ -551,16 +551,32 @@ class AppState extends ChangeNotifier {
         if (entry == null) continue;
         var body = entry.bodyMd;
         for (final note in day.notes) {
+          var noteBody = note.body;
+          final refs = RegExp(r'!?\[[^\]]*\]\(([^)\s]+)\)')
+              .allMatches(note.body)
+              .map((match) => match.group(1)!)
+              .toSet();
+          for (final ref in refs) {
+            if (ref.startsWith('http') || ref.startsWith('assets/')) continue;
+            final name = p.basename(ref);
+            final file = _findFile(source, name);
+            if (file == null) continue;
+            final fileBlob = await store.storeFile(file.path);
+            attachmentRepo.insert(
+              entryId: entry.id,
+              sha256: fileBlob.sha256,
+              filename: name,
+              mime: mimeForFilename(name),
+              sizeBytes: fileBlob.sizeBytes,
+            );
+            noteBody = noteBody.replaceAll(
+              ref,
+              'assets/${fileBlob.sha256}${fileBlob.ext}',
+            );
+          }
           final blob = await store.storeBytes(
-            Uint8List.fromList(utf8.encode(note.body)),
+            Uint8List.fromList(utf8.encode(noteBody)),
             note.filename,
-          );
-          attachmentRepo.insert(
-            entryId: entry.id,
-            sha256: blob.sha256,
-            filename: note.filename,
-            mime: 'text/x-mdiary-note',
-            sizeBytes: blob.sizeBytes,
           );
           body = body.replaceAll(
             'notes/${note.filename}',
