@@ -73,7 +73,7 @@ void main() {
     expect(skill.markdown, contains('name: mdiary-skill-'));
     expect(skill.markdown, contains('description:'));
     expect(File(skill.file).existsSync(), isTrue);
-    expect(p.dirname(p.dirname(skill.directory)), p.join(libraryRoot.path, 'db'));
+    expect(p.dirname(p.dirname(skill.directory)), libraryRoot.path);
     final meta = File(p.join(skill.directory, 'meta.json'));
     expect(meta.existsSync(), isTrue);
     expect(meta.readAsStringSync(), contains('fake:fake-skill'));

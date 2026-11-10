@@ -395,7 +395,14 @@ RAG 的产物统一放 `<库目录>/rag/`：索引可重建；`reports/` 与 `so
 - 新增 `cosmos_layout.dart`（纯几何）、`cosmos_painter.dart`（CustomPainter）、重写 `star_map_page.dart`；
 - 测试 264 passed（新增 6 几何/命中，界面测试改为新视图）。
 
-### 10.13 后续开发起点
+### 10.13 v2.7 模型统一 / 分词 / 记忆（2026-11-10）
+
+- 统一模型管理：`models.json` 配置 + 角色，问答/生成/向量/分词/记忆按角色取模型；
+- 分词导入：文件夹 → `segment` 模型切分 → 预览 → 新建库导入；
+- 记忆对话：仅用蒸馏 skill，按库持久化 `agent/chat.jsonl`；
+- 测试 279 passed（新增 11）。
+
+### 10.14 后续开发起点
 
 - **v1.1（打磨）**：先做 backlog A 组（单实例、`ShellExecuteW`、导出幽灵条目、导入大小上限）+ B 组体验项。
 - **v2.x（RAG，本地优先）**：v2.0 索引/问答/日报/soul/界面/云端，v2.1 多轮追问与索引状态，

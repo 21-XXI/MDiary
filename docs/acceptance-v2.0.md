@@ -1,7 +1,7 @@
 # v2.3 验收清单
 
 对应 `docs/project.md` 第 3/4 节与 `docs/rag.md`。执行环境：Windows 10/11 x64，
-`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.6.0**（2026-11-10，含 2.6 星图）。
+`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.7.0**（2026-11-10，含模型统一/分词/记忆）。
 
 > 状态列：`PASS` / `FAIL`（附现象）/ `BLOCKED`；标「自动」的由 `flutter test` 覆盖。
 > v1.1.1 及更早的验收记录见 git 历史中的 `acceptance-v1.1.md`。
@@ -11,10 +11,10 @@
 | # | 项 | 命令 | 期望 | 状态 |
 |---|---|---|---|---|
 | A1 | 静态分析 | `flutter analyze` | 0 issue | **PASS**（2026-11-06，0 issue） |
-| A2 | 单元/界面测试 | `flutter test` | 全绿 | **PASS**（264 passed） |
+| A2 | 单元/界面测试 | `flutter test` | 全绿 | **PASS**（279 passed） |
 | A3 | Release 构建 | `scripts\build.ps1` | 产出 exe | **PASS**（Release 目录 21.9 MB） |
 | A4 | 冒烟 | `scripts\smoke.ps1` | 启动建库 + 单实例 | **PASS**（verify.ps1 自动执行） |
-| A5 | 交付校验 | `SHA256SUMS.txt` | 与 zip 一致 | **PASS**（`MDiary-2.6.0-windows-x64.zip`） |
+| A5 | 交付校验 | `SHA256SUMS.txt` | 与 zip 一致 | **PASS**（`MDiary-2.7.0-windows-x64.zip`） |
 
 ## B. 书写 / 存储（v1.1.1 能力回归）
 
@@ -186,9 +186,20 @@
 | P7 | 滚轮缩放 | 上/下滚 | 尺度切换、不报错 | 人工 |
 | P8 | 附件公转 | 月视图看有附件星 | 小点绕星旋转 | 人工 |
 
-## Q. 汇总
+## Q. v2.7 模型 / 分词 / 记忆
 
-- 自动化：`flutter analyze` 0 issue、`flutter test` **264 passed**、构建成功、冒烟通过。
-- 交付：`dist/MDiary-2.6.0-windows-x64/`、同名 zip、`SHA256SUMS.txt`。
+| # | 项 | 操作 | 期望 | 状态 |
+|---|---|---|---|---|
+| Q1 | 模型迁移 | 首次启动 | 自动生成 models.json 与三套本地配置 | **自动**：`model_registry_test` |
+| Q2 | 角色持久化 | 改角色后重启 | 角色保留 | **自动**：`model_registry_test` |
+| Q3 | 分词解析 | 模型 JSON | 排序/跳过/去重/未知附件警告 | **自动**：`diary_segmenter_test` |
+| Q4 | 分词建库 | 确认导入 | 新库 + 日期文件夹 + 附件 | 人工 |
+| Q5 | 记忆持久化 | 对话后重开 | 消息仍在 | **自动**：`memory_chat_test` |
+| Q6 | 记忆无 skill | 直接对话 | 明确报错 | **自动**：`memory_chat_test` |
+
+## R. 汇总
+
+- 自动化：`flutter analyze` 0 issue、`flutter test` **279 passed**、构建成功、冒烟通过。
+- 交付：`dist/MDiary-2.7.0-windows-x64/`、同名 zip、`SHA256SUMS.txt`。
 - 待人工确认：B3、G1（真机点击）、H7、H10。
 - 已知限制：问答无多轮记忆；embedding 仅本地；模型质量取决于本机模型。

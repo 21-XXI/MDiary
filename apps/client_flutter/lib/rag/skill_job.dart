@@ -186,7 +186,7 @@ class SkillJob {
 
   /// `<库目录>/db/skill`。
   static String directoryFor(RagDatabase rag) =>
-      p.join(p.dirname(p.dirname(rag.path)), 'db', 'skill');
+      p.join(p.dirname(p.dirname(rag.path)), 'skill');
 
   String get directory => directoryFor(rag);
 

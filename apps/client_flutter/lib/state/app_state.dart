@@ -18,6 +18,7 @@ import '../rag/chat.dart';
 import '../rag/diary_segmenter.dart';
 import '../rag/cloud_client.dart';
 import '../rag/embedder.dart';
+import '../rag/memory_chat.dart';
 import '../rag/model_registry.dart';
 import '../rag/rag_settings.dart';
 import '../rag/rag_service.dart';
@@ -140,6 +141,7 @@ class AppState extends ChangeNotifier {
     this.skillDistillerOverride,
     RagSettingsStore? ragSettingsStore,
     ModelRegistryStore? modelRegistryStore,
+    this.memoryCompleterOverride,
   }) : _filePicker = filePicker ?? _defaultFilePicker,
        _modelRegistryStore = modelRegistryStore ?? ModelRegistryStore(),
        _ragSettingsStore = ragSettingsStore ?? RagSettingsStore(),
@@ -167,6 +169,9 @@ class AppState extends ChangeNotifier {
   final Summarizer? ragSummarizerOverride;
   final Answerer? ragAnswererOverride;
   final SkillDistiller? skillDistillerOverride;
+
+  /// 测试用：替代记忆对话的模型调用。
+  final Future<String> Function(String prompt)? memoryCompleterOverride;
   final RagSettingsStore _ragSettingsStore;
   final ModelRegistryStore _modelRegistryStore;
   late RagSettings _ragSettings;
@@ -226,6 +231,56 @@ class AppState extends ChangeNotifier {
       model: _ragSettings.generateModel,
       baseUrl: _ragSettings.baseUrl,
     ).complete(prompt);
+  }
+
+  // ───────────────────────────── 记忆对话（v2.7） ─────────────────────────────
+
+  String get memoryChatPath => MemoryChatStore.pathFor(libraryPath);
+
+  List<MemoryMessage> loadMemoryChat() =>
+      MemoryChatStore(memoryChatPath).load();
+
+  String? get memorySkillName {
+    final skills = listSkills();
+    return skills.isEmpty ? null : skills.first.name;
+  }
+
+  /// 只用蒸馏 skill 的记忆对话（不检索日记）；按库持久化。
+  Future<MemoryMessage> askMemory(String question) async {
+    final skills = listSkills();
+    if (skills.isEmpty) {
+      throw StateError('还没有蒸馏 skill：先到「蒸馏」页生成一份');
+    }
+    final history = loadMemoryChat();
+    final prompt = buildMemoryPrompt(
+      skill: skills.first.markdown,
+      history: history,
+      question: question,
+    );
+    final store = MemoryChatStore(memoryChatPath);
+    store.append(
+      MemoryMessage(
+        fromUser: true,
+        text: question,
+        createdAt: DateTime.now(),
+      ),
+    );
+    final answer = memoryCompleterOverride != null
+        ? await memoryCompleterOverride!(prompt)
+        : await completeForRole(ModelRole.memory, prompt);
+    final reply = MemoryMessage(
+      fromUser: false,
+      text: answer.trim(),
+      createdAt: DateTime.now(),
+    );
+    store.append(reply);
+    notifyListeners();
+    return reply;
+  }
+
+  void clearMemoryChat() {
+    MemoryChatStore(memoryChatPath).clear();
+    notifyListeners();
   }
 
   /// 读取文件夹并让分词模型给出切分计划（不落库）。

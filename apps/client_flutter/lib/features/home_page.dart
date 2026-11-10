@@ -11,6 +11,7 @@ import '../ui/month_calendar.dart';
 import '../ui/widgets.dart';
 import 'entry_editor_page.dart';
 import 'rag_page.dart';
+import 'memory_page.dart';
 import 'segment_page.dart';
 import 'skill_page.dart';
 import 'settings_page.dart';
@@ -210,6 +211,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 tooltip: 'RAG（问答 / 日报 / 档案）',
                 onPressed: _openRag,
                 icon: const Icon(Icons.auto_awesome_outlined),
+              ),
+              _HeaderIconButton(
+                tooltip: '记忆对话',
+                onPressed: () => _openPage(const MemoryPage()),
+                icon: const Icon(Icons.forum_outlined),
               ),
               _HeaderIconButton(
                 tooltip: '分词导入',
@@ -604,7 +610,7 @@ class _StatusBar extends StatelessWidget {
           ),
           const SizedBox(width: 14),
           Text(
-            'v2.6.0',
+            'v2.7.0',
             style: theme.textTheme.labelSmall?.copyWith(
               color: scheme.onSurfaceVariant,
             ),
