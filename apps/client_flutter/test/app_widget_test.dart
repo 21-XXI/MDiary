@@ -171,10 +171,9 @@ void main() {
     expect(find.textContaining('粗体'), findsWidgets);
   }, skip: skipWidgetTests);
 
-  testWidgets('Ctrl+N 新建第二篇，列表与库同步', (tester) async {
+  testWidgets('Ctrl+N 遵循一天一个主文件', (tester) async {
     await pumpApp(tester);
     await createEntry(tester);
-    // 先写入内容，避免第一篇作为「空草稿」在切换时被清理
     await tester.enterText(find.byKey(const Key('editor-body')), '第一篇的内容');
     await tester.pump(const Duration(milliseconds: 900));
     await tester.pumpAndSettle();
@@ -186,15 +185,8 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
 
-    // 新草稿还没输入内容，此时库里仍是 1 篇，但列表里已经多出一条空草稿
-    expect(state.selected, isNotNull);
-    expect(state.selected!.bodyMd, isEmpty);
-    expect(state.entries.length, 2);
-
-    await tester.enterText(find.byKey(const Key('editor-body')), '第二篇');
-    await tester.pump(const Duration(milliseconds: 900));
-    await tester.pumpAndSettle();
-    expect(state.entryRepo.count(), 2);
+    expect(state.entryRepo.count(), 1, reason: '不应再建第二篇');
+    expect(state.selected?.bodyMd, contains('第一篇的内容'));
   }, skip: skipWidgetTests);
 
   testWidgets('搜索按中文子串过滤，清空后恢复', (tester) async {

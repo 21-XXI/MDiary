@@ -95,30 +95,7 @@ class _AgentPageState extends State<AgentPage> {
           Card(
             child: Column(
               children: <Widget>[
-                SwitchListTile(
-                  value: config.allowReadFolder,
-                  onChanged: (value) => state.setAgentConfig(
-                    config.copyWith(allowReadFolder: value),
-                  ),
-                  title: const Text('读取文件夹'),
-                  subtitle: const Text('分词时读取 .md / .txt'),
-                ),
-                SwitchListTile(
-                  value: config.allowCreateLibrary,
-                  onChanged: (value) => state.setAgentConfig(
-                    config.copyWith(allowCreateLibrary: value),
-                  ),
-                  title: const Text('新建库'),
-                  subtitle: const Text('分词确认后自动建库'),
-                ),
-                SwitchListTile(
-                  value: config.allowWriteDiary,
-                  onChanged: (value) => state.setAgentConfig(
-                    config.copyWith(allowWriteDiary: value),
-                  ),
-                  title: const Text('写入日记'),
-                  subtitle: const Text('把切分结果写进库'),
-                ),
+
                 SwitchListTile(
                   value: config.allowReadSkill,
                   onChanged: (value) => state.setAgentConfig(

@@ -63,12 +63,16 @@ class OllamaAnswerer implements Answerer {
     this.model = 'qwen3:8b',
     this.timeout = const Duration(minutes: 5),
     this.maxSourceChars = 900,
+    this.temperature = 0.3,
+    this.numCtx = 0,
   });
 
   final String baseUrl;
   final String model;
   final Duration timeout;
   final int maxSourceChars;
+  final double temperature;
+  final int numCtx;
 
   @override
   String get modelId => 'ollama:$model';
@@ -106,7 +110,11 @@ class OllamaAnswerer implements Answerer {
             // qwen3 这类思考模型默认会先"想"很久，问答场景关掉更好：
             // 实测 27.5s / 答错 → 9s / 答对。
             if (!think) 'think': false,
-            'options': <String, Object>{'temperature': 0.3, 'num_predict': 320},
+            'options': <String, Object>{
+              'temperature': temperature,
+              'num_predict': 320,
+              if (numCtx > 0) 'num_ctx': numCtx,
+            },
             'messages': <Map<String, String>>[
               <String, String>{'role': 'user', 'content': prompt},
             ],

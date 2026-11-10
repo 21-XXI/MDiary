@@ -1084,6 +1084,21 @@ class _ModelsCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   IconButton(
+                    tooltip: '测试连接',
+                    icon: const Icon(Icons.wifi_tethering, size: 16),
+                    onPressed: () async {
+                      final error = await state.testModelProfile(profile);
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            error ?? '${profile.name} 连接正常',
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  IconButton(
                     tooltip: '编辑',
                     icon: const Icon(Icons.edit_outlined, size: 16),
                     onPressed: () => _edit(context, existing: profile),

@@ -121,10 +121,11 @@ class AttachmentRepository {
     required String sha256,
     required int sizeBytes,
     required String mime,
+    required String filename,
   }) {
     _raw.execute(
-      'UPDATE attachments SET sha256 = ?, size_bytes = ?, mime = ? WHERE id = ?',
-      <Object?>[sha256, sizeBytes, mime, id],
+      'UPDATE attachments SET sha256 = ?, size_bytes = ?, mime = ?, filename = ? WHERE id = ?',
+      <Object?>[sha256, sizeBytes, mime, filename, id],
     );
   }
 

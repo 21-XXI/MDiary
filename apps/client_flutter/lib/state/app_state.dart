@@ -221,6 +221,7 @@ class AppState extends ChangeNotifier {
         sha256: blob.sha256,
         sizeBytes: blob.sizeBytes,
         mime: mime,
+        filename: filename,
       );
       attachment = Attachment(
         id: existing.id,
@@ -231,10 +232,9 @@ class AppState extends ChangeNotifier {
         sizeBytes: blob.sizeBytes,
         createdAt: existing.createdAt,
       );
-      body = current.bodyMd.replaceAll(
-        'assets/${existing.sha256}',
-        'assets/${blob.sha256}',
-      );
+      body = current.bodyMd
+          .replaceAll('assets/${existing.sha256}', 'assets/${blob.sha256}')
+          .replaceAll('[${existing.filename}]', '[$filename]');
     } else {
       attachment = attachmentRepo.insert(
         entryId: entry.id,
@@ -249,14 +249,7 @@ class AppState extends ChangeNotifier {
     // 编辑会生成新 blob，旧 blob 不再被引用：顺手清理。
     attachmentRepo.deleteUnreferencedBlobs();
     await refresh();
-    // 附加 md 也进 RAG：先重建索引（索引是增量/可重建的，失败不影响保存）。
-    unawaited(() async {
-      try {
-        await rag.reindex();
-      } on Object {
-        // 模型不可用或索引库未就绪：下次每日任务会补
-      }
-    }());
+    _scheduleRagReindex();
     return attachment;
   }
 
@@ -275,6 +268,20 @@ class AppState extends ChangeNotifier {
   void clearAgentRuns() {
     AgentRunLog(agentRunsPath).clear();
     notifyListeners();
+  }
+
+  Timer? _ragReindexTimer;
+
+  /// 保存子笔记后防抖重建索引，避免连续编辑反复全量扫描。
+  void _scheduleRagReindex() {
+    _ragReindexTimer?.cancel();
+    _ragReindexTimer = Timer(const Duration(seconds: 5), () async {
+      try {
+        await rag.reindex();
+      } on Object {
+        // 模型不可用或索引库未就绪：下次每日任务会补
+      }
+    });
   }
 
   void _logAgent(String kind, int steps, bool ok, String message) {
@@ -306,6 +313,28 @@ class AppState extends ChangeNotifier {
 
   void removeModelProfile(String id) =>
       saveModelRegistry(_modelRegistry.withoutProfile(id));
+
+  /// 测试某个模型配置是否可用；成功返回 null。
+  Future<String?> testModelProfile(ModelProfile profile) async {
+    if (!profile.isCloud) {
+      final models = await listOllamaModels(baseUrl: profile.baseUrl);
+      final found = models.any(
+        (name) => name == profile.model || name.startsWith('${profile.model}:'),
+      );
+      return found ? null : '没有找到模型 ${profile.model}';
+    }
+    final key = SecretStore.unprotect(profile.apiKeyCipher);
+    if (key == null || key.trim().isEmpty) return '还没有配置 API Key';
+    final available = await CloudAnswerer(
+      CloudConfig(
+        baseUrl: profile.baseUrl,
+        model: profile.model,
+        apiKey: key.trim(),
+        temperature: profile.temperature,
+      ),
+    ).isAvailable();
+    return available ? null : '连不上 ${profile.baseUrl} 或 Key 无效';
+  }
 
   void setRoleProfile(ModelRole role, String? profileId) =>
       saveModelRegistry(_modelRegistry.withRole(role, profileId));
@@ -1424,11 +1453,17 @@ class AppState extends ChangeNotifier {
               baseUrl: profile.baseUrl,
               model: profile.model,
               apiKey: key,
+              temperature: profile.temperature,
             ),
           );
         }
       } else {
-        return OllamaAnswerer(model: profile.model, baseUrl: profile.baseUrl);
+        return OllamaAnswerer(
+          model: profile.model,
+          baseUrl: profile.baseUrl,
+          temperature: profile.temperature,
+          numCtx: profile.numCtx,
+        );
       }
     }
     return cloudConfig != null
@@ -1988,6 +2023,7 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _ragReindexTimer?.cancel();
     _rag?.close();
     _rag = null;
     _searchDebounce?.cancel();

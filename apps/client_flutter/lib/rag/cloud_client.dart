@@ -11,11 +11,13 @@ class CloudConfig {
     required this.baseUrl,
     required this.model,
     required this.apiKey,
+    this.temperature = 0.3,
   });
 
   final String baseUrl;
   final String model;
   final String apiKey;
+  final double temperature;
 
   /// 去掉末尾斜杠，拼出 `/chat/completions`。
   Uri get chatUri {
@@ -99,7 +101,7 @@ class CloudAnswerer implements Answerer {
         jsonEncode(<String, Object>{
           'model': config.model,
           'stream': true,
-          'temperature': 0.3,
+          'temperature': config.temperature,
           'messages': <Map<String, String>>[
             <String, String>{'role': 'user', 'content': prompt},
           ],
@@ -247,7 +249,7 @@ class CloudSummarizer implements Summarizer {
         jsonEncode(<String, Object>{
           'model': config.model,
           'stream': false,
-          'temperature': 0.3,
+          'temperature': config.temperature,
           if (jsonMode) 'response_format': <String, String>{'type': 'json_object'},
           'messages': <Map<String, String>>[
             <String, String>{'role': 'user', 'content': prompt},

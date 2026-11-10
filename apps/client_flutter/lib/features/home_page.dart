@@ -142,7 +142,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final key = event.logicalKey;
     if (keyboard.isControlPressed) {
       if (key == LogicalKeyboardKey.keyN) {
-        AppScope.of(context).createEntry();
+        _newEntry(AppScope.of(context));
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.keyS) {
