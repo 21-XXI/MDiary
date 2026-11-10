@@ -14,6 +14,7 @@ import '../core/system_open.dart';
 import '../core/emoji.dart';
 import '../core/secret_store.dart';
 import '../rag/answer.dart';
+import '../rag/agent_config.dart';
 import '../rag/chat.dart';
 import '../rag/diary_segmenter.dart';
 import '../rag/cloud_client.dart';
@@ -141,8 +142,11 @@ class AppState extends ChangeNotifier {
     this.skillDistillerOverride,
     RagSettingsStore? ragSettingsStore,
     ModelRegistryStore? modelRegistryStore,
+    AgentConfigStore? agentConfigStore,
     this.memoryCompleterOverride,
+    this.segmentCompleterOverride,
   }) : _filePicker = filePicker ?? _defaultFilePicker,
+       _agentConfigStore = agentConfigStore ?? AgentConfigStore(),
        _modelRegistryStore = modelRegistryStore ?? ModelRegistryStore(),
        _ragSettingsStore = ragSettingsStore ?? RagSettingsStore(),
        _directoryPicker = directoryPicker ?? _defaultDirectoryPicker,
@@ -150,6 +154,7 @@ class AppState extends ChangeNotifier {
        tagRepo = tagRepository ?? TagRepository(db) {
     _ragSettings = _ragSettingsStore.load();
     _modelRegistry = _modelRegistryStore.load();
+    _agentConfig = _agentConfigStore.load();
     if (_modelRegistry.isEmpty) {
       _modelRegistry = ModelRegistry.migration(_ragSettings);
       _modelRegistryStore.save(_modelRegistry);
@@ -172,8 +177,13 @@ class AppState extends ChangeNotifier {
 
   /// 测试用：替代记忆对话的模型调用。
   final Future<String> Function(String prompt)? memoryCompleterOverride;
+
+  /// 测试用：替代分词模型的调用。
+  final Future<String> Function(String prompt)? segmentCompleterOverride;
   final RagSettingsStore _ragSettingsStore;
   final ModelRegistryStore _modelRegistryStore;
+  final AgentConfigStore _agentConfigStore;
+  AgentConfig _agentConfig = const AgentConfig();
   late RagSettings _ragSettings;
   ModelRegistry _modelRegistry = const ModelRegistry();
 
@@ -184,6 +194,36 @@ class AppState extends ChangeNotifier {
   ModelRegistry get modelRegistry => _modelRegistry;
 
   String? get modelsPath => _modelRegistryStore.path;
+
+  AgentConfig get agentConfig => _agentConfig;
+
+  String get agentRunsPath => AgentRunLog.pathFor(libraryPath);
+
+  List<AgentRun> loadAgentRuns() => AgentRunLog(agentRunsPath).load();
+
+  void setAgentConfig(AgentConfig next) {
+    _agentConfig = next;
+    _agentConfigStore.save(next);
+    notifyListeners();
+  }
+
+  void clearAgentRuns() {
+    AgentRunLog(agentRunsPath).clear();
+    notifyListeners();
+  }
+
+  void _logAgent(String kind, int steps, bool ok, String message) {
+    if (!_agentConfig.logEnabled) return;
+    AgentRunLog(agentRunsPath).append(
+      AgentRun(
+        kind: kind,
+        startedAt: DateTime.now(),
+        steps: steps,
+        ok: ok,
+        message: message,
+      ),
+    );
+  }
 
   ModelProfile? profileFor(ModelRole role) => _modelRegistry.profileFor(role);
 
@@ -247,6 +287,9 @@ class AppState extends ChangeNotifier {
 
   /// 只用蒸馏 skill 的记忆对话（不检索日记）；按库持久化。
   Future<MemoryMessage> askMemory(String question) async {
+    if (!_agentConfig.allowReadSkill) {
+      throw StateError('Agent 权限关闭：读取 skill');
+    }
     final skills = listSkills();
     if (skills.isEmpty) {
       throw StateError('还没有蒸馏 skill：先到「蒸馏」页生成一份');
@@ -274,6 +317,7 @@ class AppState extends ChangeNotifier {
       createdAt: DateTime.now(),
     );
     store.append(reply);
+    _logAgent('memory', 1, true, question);
     notifyListeners();
     return reply;
   }
@@ -283,11 +327,27 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 读取文件夹并让分词模型给出切分计划（不落库）。
-  Future<SegmentPlan> planSegmentation(String directory) {
-    return DiarySegmenter(
-      complete: (prompt) => completeForRole(ModelRole.segment, prompt),
-    ).planDirectory(directory);
+  /// 读取文件夹并让分词模型给出切分计划（不落库）；解析失败会重试，最多 maxSteps 次。
+  Future<SegmentPlan> planSegmentation(String directory) async {
+    if (!_agentConfig.allowReadFolder) {
+      throw const SegmenterException('Agent 权限关闭：读取文件夹');
+    }
+    final segmenter = DiarySegmenter(
+      complete: segmentCompleterOverride ??
+          ((prompt) => completeForRole(ModelRole.segment, prompt)),
+    );
+    Object? lastError;
+    for (var step = 1; step <= _agentConfig.maxSteps; step++) {
+      try {
+        final plan = await segmenter.planDirectory(directory);
+        _logAgent('segment', step, true, '切出 ${plan.days.length} 天');
+        return plan;
+      } on Object catch (error) {
+        lastError = error;
+      }
+    }
+    _logAgent('segment', _agentConfig.maxSteps, false, '$lastError');
+    throw SegmenterException('$lastError');
   }
 
   /// 新建库 → 把切分结果写成日期文件夹 → 导入 → 切换过去。
@@ -296,6 +356,12 @@ class AppState extends ChangeNotifier {
     required String sourceDirectory,
     required String libraryName,
   }) async {
+    if (!_agentConfig.allowCreateLibrary) {
+      throw const SegmenterException('Agent 权限关闭：新建库');
+    }
+    if (!_agentConfig.allowWriteDiary) {
+      throw const SegmenterException('Agent 权限关闭：写入日记');
+    }
     final root = AppPaths.isInitialized ? AppPaths.root.path : dataRootPath;
     final parent = p.join(root, 'libraries');
     Directory(parent).createSync(recursive: true);
