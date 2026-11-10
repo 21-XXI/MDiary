@@ -217,6 +217,7 @@ class _SkillPageState extends State<SkillPage> {
                 child: SingleChildScrollView(
                   child: MarkdownView(
                     data: skill.markdown,
+                    emoji: AppScope.of(context).emojiMap,
                     resolveLocalPath: (_) => null,
                     padding: EdgeInsets.zero,
                   ),

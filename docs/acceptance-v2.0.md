@@ -1,7 +1,7 @@
 # v2.3 验收清单
 
 对应 `docs/project.md` 第 3/4 节与 `docs/rag.md`。执行环境：Windows 10/11 x64，
-`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.5.0**（2026-11-09，含 2.5 Markdown 书写增强）。
+`flutter build windows --release --no-tree-shake-icons` 产物。版本：**2.5.1**（2026-11-10，含 2.5.1 表情短代码）。
 
 > 状态列：`PASS` / `FAIL`（附现象）/ `BLOCKED`；标「自动」的由 `flutter test` 覆盖。
 > v1.1.1 及更早的验收记录见 git 历史中的 `acceptance-v1.1.md`。
@@ -11,10 +11,10 @@
 | # | 项 | 命令 | 期望 | 状态 |
 |---|---|---|---|---|
 | A1 | 静态分析 | `flutter analyze` | 0 issue | **PASS**（2026-11-06，0 issue） |
-| A2 | 单元/界面测试 | `flutter test` | 全绿 | **PASS**（251 passed） |
+| A2 | 单元/界面测试 | `flutter test` | 全绿 | **PASS**（258 passed） |
 | A3 | Release 构建 | `scripts\build.ps1` | 产出 exe | **PASS**（Release 目录 21.9 MB） |
 | A4 | 冒烟 | `scripts\smoke.ps1` | 启动建库 + 单实例 | **PASS**（verify.ps1 自动执行） |
-| A5 | 交付校验 | `SHA256SUMS.txt` | 与 zip 一致 | **PASS**（`MDiary-2.5.0-windows-x64.zip`） |
+| A5 | 交付校验 | `SHA256SUMS.txt` | 与 zip 一致 | **PASS**（`MDiary-2.5.1-windows-x64.zip`） |
 
 ## B. 书写 / 存储（v1.1.1 能力回归）
 
@@ -162,9 +162,20 @@
 | N6 | 界面字体 | 设置 → 外观 | 立即变化并持久 | 人工 |
 | N7 | 编辑器字体 | 设置 → 外观 | 编辑区立即变化并持久 | 人工 |
 
-## O. 汇总
+## O. v2.5.1 表情短代码
 
-- 自动化：`flutter analyze` 0 issue、`flutter test` **251 passed**、构建成功、冒烟通过。
-- 交付：`dist/MDiary-2.5.0-windows-x64/`、同名 zip、`SHA256SUMS.txt`。
+| # | 项 | 操作 | 期望 | 状态 |
+|---|---|---|---|---|
+| O1 | 内置映射 | `:smile:` / `:微笑:` | 显示 😄 | **自动**：`emoji_test` |
+| O2 | 未知短代码 | `:unknown:` | 原样保留 | **自动**：`emoji_test` |
+| O3 | 代码块跳过 | 围栏/行内代码里的 `:smile:` | 不替换 | **自动**：`emoji_test` |
+| O4 | 自定义覆盖 | 把 smile 改成 🙂 | 预览用自定义值 | **自动**：`emoji_test` |
+| O5 | 持久化 | 重启/重开库 | 自定义仍在 | **自动**：`emoji_test` |
+| O6 | 面板选择 | 打开「表情」点 smile | 插入 `:smile: ` | **自动**：`emoji_test` |
+
+## P. 汇总
+
+- 自动化：`flutter analyze` 0 issue、`flutter test` **258 passed**、构建成功、冒烟通过。
+- 交付：`dist/MDiary-2.5.1-windows-x64/`、同名 zip、`SHA256SUMS.txt`。
 - 待人工确认：B3、G1（真机点击）、H7、H10。
 - 已知限制：问答无多轮记忆；embedding 仅本地；模型质量取决于本机模型。

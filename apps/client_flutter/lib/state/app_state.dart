@@ -11,6 +11,7 @@ import '../core/app_paths.dart';
 import '../core/clipboard_image.dart';
 import '../core/ids.dart';
 import '../core/system_open.dart';
+import '../core/emoji.dart';
 import '../core/secret_store.dart';
 import '../rag/answer.dart';
 import '../rag/chat.dart';
@@ -215,6 +216,7 @@ class AppState extends ChangeNotifier {
   double _editorFontSize = 16;
   String _uiFont = '';
   String _editorFont = 'Cascadia Mono';
+  Map<String, String> _emojiCustom = const <String, String>{};
 
   DateTime _selectedDate = DateTime.now();
   DateTime _calendarMonth = DateTime(
@@ -303,6 +305,15 @@ class AppState extends ChangeNotifier {
   /// 编辑器等宽字体。
   String get editorFont => _editorFont;
 
+  /// 用户自定义/覆盖的表情短代码。
+  Map<String, String> get emojiCustom => _emojiCustom;
+
+  /// 内置 + 自定义（自定义优先）。
+  Map<String, String> get emojiMap => <String, String>{
+    ...builtinEmoji,
+    ..._emojiCustom,
+  };
+
   /// 日历当前选中的那天。
   DateTime get selectedDate => _selectedDate;
 
@@ -380,6 +391,7 @@ class AppState extends ChangeNotifier {
         .clamp(12, 28);
     _uiFont = metaRepo.get('ui_font') ?? '';
     _editorFont = metaRepo.get('editor_font') ?? 'Cascadia Mono';
+    _emojiCustom = _readEmojiCustom();
     _recentQueries = _readRecentQueries();
     _loading = false;
     await refresh();
@@ -1412,6 +1424,51 @@ class AppState extends ChangeNotifier {
       ThemeMode.dark => 'dark',
       ThemeMode.system => 'system',
     });
+    notifyListeners();
+  }
+
+  Map<String, String> _readEmojiCustom() {
+    final raw = metaRepo.get('emoji_custom');
+    if (raw == null || raw.trim().isEmpty) return const <String, String>{};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        return <String, String>{
+          for (final entry in decoded.entries)
+            if ('${entry.value}'.trim().isNotEmpty)
+              '${entry.key}'.trim(): '${entry.value}'.trim(),
+        };
+      }
+    } on Object {
+      // 坏数据当没有
+    }
+    return const <String, String>{};
+  }
+
+  void _saveEmojiCustom() {
+    metaRepo.set(
+      'emoji_custom',
+      jsonEncode(_emojiCustom),
+    );
+  }
+
+  /// 新增/覆盖一个表情映射。
+  void setEmoji(String code, String value) {
+    final key = code.trim().replaceAll(':', '').trim();
+    final emoji = value.trim();
+    if (key.isEmpty || emoji.isEmpty) return;
+    _emojiCustom = <String, String>{..._emojiCustom, key: emoji};
+    _saveEmojiCustom();
+    notifyListeners();
+  }
+
+  /// 删除自定义映射（内置短代码恢复原值）。
+  void removeEmoji(String code) {
+    final key = code.trim().replaceAll(':', '').trim();
+    if (!_emojiCustom.containsKey(key)) return;
+    final next = <String, String>{..._emojiCustom}..remove(key);
+    _emojiCustom = next;
+    _saveEmojiCustom();
     notifyListeners();
   }
 

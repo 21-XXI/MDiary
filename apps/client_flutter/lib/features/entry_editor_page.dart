@@ -6,6 +6,7 @@ import '../core/theme.dart';
 import '../data/models.dart';
 import '../state/app_state.dart';
 import '../ui/markdown_view.dart';
+import '../ui/emoji_picker.dart';
 import '../ui/symbol_palette.dart';
 
 enum EditorMode { edit, split, preview }
@@ -337,6 +338,21 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     IconButton(
+                      tooltip: '表情',
+                      onPressed: () async {
+                        final code = await showEmojiPicker(
+                          context,
+                          state: _state,
+                        );
+                        if (code == null || !mounted) return;
+                        insertSymbol(
+                          _bodyController,
+                          SymbolItem(code, ':$code: '),
+                        );
+                      },
+                      icon: const Icon(Icons.emoji_emotions_outlined),
+                    ),
+                    IconButton(
                       tooltip: '符号与公式',
                       onPressed: () => showSymbolPalette(context, _bodyController),
                       icon: const Icon(Icons.functions),
@@ -390,6 +406,7 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
           child: MarkdownView(
             data: _bodyController.text,
             resolveLocalPath: _resolveReference,
+            emoji: _state.emojiMap,
             resolveName: _nameOfReference,
             onOpenLink: _onOpenReference,
           ),
@@ -404,6 +421,7 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
                 child: MarkdownView(
                   data: _bodyController.text,
                   resolveLocalPath: _resolveReference,
+                  emoji: _state.emojiMap,
                   resolveName: _nameOfReference,
                   onOpenLink: _onOpenReference,
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 48),

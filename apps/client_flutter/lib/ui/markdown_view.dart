@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
+import '../core/emoji.dart';
 import 'markdown_extras.dart';
 
 /// Markdown 预览。附件图片走本地内容寻址库；找不到时给出可见的占位提示，
@@ -23,6 +24,7 @@ class MarkdownView extends StatelessWidget {
     this.resolveName,
     this.onOpenLink,
     this.padding = const EdgeInsets.fromLTRB(24, 16, 24, 64),
+    this.emoji = const <String, String>{},
   });
 
   final String data;
@@ -35,10 +37,14 @@ class MarkdownView extends StatelessWidget {
   final void Function(String reference)? onOpenLink;
   final EdgeInsets padding;
 
+  /// 短代码 → 表情；为空时不做替换。
+  final Map<String, String> emoji;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    if (data.trim().isEmpty) {
+    final source = applyEmoji(data, emoji);
+    if (source.trim().isEmpty) {
       return Center(
         child: Text(
           '还没有内容',
@@ -48,7 +54,7 @@ class MarkdownView extends StatelessWidget {
         ),
       );
     }
-    final segments = splitMarkdownSegments(data);
+    final segments = splitMarkdownSegments(source);
     if (segments.length == 1 && segments.first.text != null) {
       return Padding(
         padding: padding,
