@@ -31,11 +31,13 @@ class _ChildNotePageState extends State<ChildNotePage> {
     text: widget.initialText,
   );
   bool _preview = false;
+  final FocusNode _outlineFocus = FocusNode();
 
   @override
   void dispose() {
     _name.dispose();
     _body.dispose();
+    _outlineFocus.dispose();
     super.dispose();
   }
 
@@ -150,7 +152,7 @@ class _ChildNotePageState extends State<ChildNotePage> {
                   IconButton(
                     tooltip: '大纲',
                     onPressed: () =>
-                        showOutlineDialog(context, _body, FocusNode()),
+                        showOutlineDialog(context, _body, _outlineFocus),
                     icon: const Icon(Icons.list_alt),
                   ),
                   const Spacer(),

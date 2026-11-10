@@ -669,6 +669,12 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
   Widget _buildFooter(BuildContext context, ColorScheme scheme) {
     final theme = Theme.of(context);
     final chars = countCharacters(_bodyController.text);
+    var childChars = 0;
+    for (final attachment in _attachments) {
+      if (!attachment.filename.toLowerCase().endsWith('.md')) continue;
+      childChars += countCharacters(_state.attachmentText(attachment) ?? '');
+    }
+    final totalChars = chars + childChars;
     final updated = widget.entry.updatedAt;
     final style = theme.textTheme.labelSmall?.copyWith(
       color: scheme.onSurfaceVariant,
@@ -688,7 +694,8 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
                   '字数按字符统计：不计空格与换行，Markdown 标记（#、*、[] 等）也计入。\n'
                   '当前 $chars 字。',
               child: Text(
-                '${formatDayLabel(widget.entry.entryDate)} · $chars 字',
+                '${formatDayLabel(widget.entry.entryDate)} · $totalChars 字'
+                '${childChars > 0 ? '（子 $childChars）' : ''}',
                 style: style,
               ),
             ),

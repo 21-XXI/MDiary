@@ -7,6 +7,7 @@ import '../data/entry_repository.dart';
 import '../data/tag_repository.dart';
 import 'cloud_client.dart';
 import 'rag_database.dart';
+import 'skill_prompts.g.dart';
 
 /// 一份已生成的 skill 文件。
 class SkillEntry {
@@ -99,20 +100,7 @@ class CloudSkillDistiller implements SkillDistiller {
   }
 
   static String buildPrompt({required String soul, required String digest}) {
-    return '你是一个「技能蒸馏器」。把下面这个人的日记库蒸馏成一个其他大模型可以直接加载的 skill。\n'
-        '只依据材料，不要编造具体日期、金额、人名；不确定的地方写「不确定」。\n'
-        '输出 Markdown，固定结构（不要输出其它内容）：\n'
-        '# Skill: <一句话名字>\n'
-        '> <一句话说明这个 skill 能做什么>\n'
-        '## 何时使用\n'
-        '## 这个人的画像\n'
-        '## 常用事实与偏好\n'
-        '## 检索与回答规则\n'
-        '## 禁止事项\n'
-        '## 资料分层\n'
-        '资料分层固定三块：主文件事实 / 附加笔记细节 / 不确定项；\n'
-        '每条事实后标注来源：[主 日期] 或 [附 文件名]；附加笔记只能补充细节，不能推翻主文件。\n'
-        '总长度控制在 6000 字以内。\n\n'
+    return '$distillerSkillMarkdown\n\n'
         '=== soul.md ===\n$soul\n\n'
         '=== 语料摘要样本 ===\n$digest';
   }
