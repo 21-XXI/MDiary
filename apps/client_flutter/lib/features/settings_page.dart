@@ -164,7 +164,7 @@ class SettingsPage extends StatelessWidget {
               child: _ModelsCard(state: state),
             ),
           ),
-          const SectionLabel('RAG 模型'),
+          const SectionLabel('隐私与云端'),
           Card(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -907,32 +907,7 @@ class _RagModelsCard extends StatefulWidget {
 }
 
 class _RagModelsCardState extends State<_RagModelsCard> {
-  List<String> _models = const <String>[];
-  bool _loading = true;
-  bool _saved = false;
-  String? _cloudStatus;
-
-  late final TextEditingController _cloudBase = TextEditingController(
-    text: widget.state.ragSettings.cloudBaseUrl,
-  );
-  late final TextEditingController _cloudModel = TextEditingController(
-    text: widget.state.ragSettings.cloudModel,
-  );
-  late final TextEditingController _cloudKey = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _detect();
-  }
-
-  @override
-  void dispose() {
-    _cloudBase.dispose();
-    _cloudModel.dispose();
-    _cloudKey.dispose();
-    super.dispose();
-  }
+  String? _status;
 
   Future<void> _toggleCloud(bool enabled) async {
     if (enabled) {
@@ -941,11 +916,11 @@ class _RagModelsCardState extends State<_RagModelsCard> {
         builder: (dialogContext) => AlertDialog(
           title: const Text('开启云端模型？'),
           content: const Text(
-            '开启后，问答的问题与命中的日记片段、以及每日摘要/日报/灵魂档案的输入，'
-            '都会发送到你填写的云端服务。\n\n'
-            '· API Key 只存本机，用 Windows DPAPI 加密；\n'
+            '开启后，问答的问题与命中的日记片段、摘要/日报/soul 的输入，'
+            '会发送到「模型」里配置的云端服务。\n\n'
+            '· Key 只存本机，用 Windows DPAPI 加密；\n'
             '· 向量索引仍在本地，不上传；\n'
-            '· 随时可以关掉这个开关，关掉后不再上送。',
+            '· 随时可以关掉这个开关。',
           ),
           actions: <Widget>[
             TextButton(
@@ -964,193 +939,33 @@ class _RagModelsCardState extends State<_RagModelsCard> {
     widget.state.updateRagSettings(
       widget.state.ragSettings.copyWith(cloudEnabled: enabled),
     );
-    setState(() {
-      _saved = true;
-      _cloudStatus = enabled ? '已开启云端（内容会发送到云端）' : '已关闭云端';
-    });
+    setState(() => _status = enabled ? '已开启云端' : '已关闭云端');
   }
 
-  void _saveCloudFields() {
-    widget.state.updateRagSettings(
-      widget.state.ragSettings.copyWith(
-        cloudBaseUrl: _cloudBase.text.trim().isEmpty
-            ? RagSettings.defaultCloudBaseUrl
-            : _cloudBase.text.trim(),
-        cloudModel: _cloudModel.text.trim().isEmpty
-            ? RagSettings.defaultCloudModel
-            : _cloudModel.text.trim(),
-      ),
-    );
-    if (_cloudKey.text.trim().isNotEmpty) {
-      widget.state.setCloudApiKey(_cloudKey.text.trim());
-      _cloudKey.clear();
-    }
-    setState(() {
-      _saved = true;
-      _cloudStatus = '已保存';
-    });
-  }
-
-  void _clearCloudKey() {
-    widget.state.setCloudApiKey('');
-    setState(() {
-      _saved = true;
-      _cloudStatus = '已清除 API Key';
-    });
-  }
-
-  Future<void> _testCloud() async {
-    setState(() => _cloudStatus = '正在测试…');
+  Future<void> _test() async {
+    setState(() => _status = '正在测试…');
     final error = await widget.state.testCloud();
     if (!mounted) return;
-    setState(() => _cloudStatus = error ?? '连接正常');
-  }
-
-  Future<void> _detect() async {
-    setState(() => _loading = true);
-    try {
-      final models = await widget.state.installedModels();
-      if (!mounted) return;
-      setState(() {
-        _models = models;
-        _loading = false;
-      });
-    } on Object {
-      if (!mounted) return;
-      setState(() => _loading = false);
-    }
-  }
-
-  void _update(RagSettings next) {
-    widget.state.updateRagSettings(next);
-    setState(() => _saved = true);
-  }
-
-  List<String> _options(String current) => <String>{
-    current,
-    ..._models,
-  }.where((item) => item.isNotEmpty).toList(growable: false);
-
-  /// 模型下拉：本机已装的选项 + 「自定义…」。
-  Widget _dropdown({
-    required String label,
-    required String current,
-    required ValueChanged<String> onSelect,
-  }) {
-    const custom = '__custom__';
-    final options = <String>[..._options(current), custom];
-    return DropdownButtonFormField<String>(
-      key: ValueKey('$label-$current'),
-      initialValue: current,
-      decoration: InputDecoration(
-        labelText: label,
-        isDense: true,
-        border: const OutlineInputBorder(),
-      ),
-      items: <DropdownMenuItem<String>>[
-        for (final name in options)
-          DropdownMenuItem<String>(
-            value: name,
-            child: Text(name == custom ? '＋ 自定义…' : name),
-          ),
-      ],
-      onChanged: (value) async {
-        if (value == null) return;
-        if (value == custom) {
-          final entered = await showDialog<String>(
-            context: context,
-            builder: (dialogContext) => _NameDialog(
-              title: Text('自定义$label'),
-              initial: current,
-              hintText: '例如 qwen3:4b / gpt-4o-mini',
-              confirmLabel: '使用',
-            ),
-          );
-          if (entered == null || entered.trim().isEmpty) return;
-          onSelect(entered.trim());
-          return;
-        }
-        onSelect(value);
-      },
-    );
+    setState(() => _status = error ?? '连接正常');
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final settings = widget.state.ragSettings;
+    final state = widget.state;
+    final settings = state.ragSettings;
+    final profile = state.cloudProfile;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: Text(
-                _loading
-                    ? '正在检测本机 Ollama 模型…'
-                    : _models.isEmpty
-                    ? '没检测到模型（Ollama 是否在运行？）'
-                    : '已检测到 ${_models.length} 个模型',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-            TextButton.icon(
-              onPressed: _loading ? null : _detect,
-              icon: const Icon(Icons.refresh, size: 16),
-              label: const Text('重新检测'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        _dropdown(
-          label: '交互模型（问答）',
-          current: settings.askModel,
-          onSelect: (value) => _update(settings.copyWith(askModel: value)),
-        ),
-        const SizedBox(height: 12),
-        _dropdown(
-          label: '生成模型（摘要 / 日报 / soul）',
-          current: settings.generateModel,
-          onSelect: (value) => _update(settings.copyWith(generateModel: value)),
-        ),
-        const SizedBox(height: 12),
-        _dropdown(
-          label: '向量模型（索引）',
-          current: settings.embedModel,
-          onSelect: (value) => _update(settings.copyWith(embedModel: value)),
-        ),
-        const SizedBox(height: 12),
-        TextFormField(
-          initialValue: settings.baseUrl,
-          decoration: const InputDecoration(
-            labelText: 'Ollama 地址',
-            isDense: true,
-            border: OutlineInputBorder(),
-          ),
-          onFieldSubmitted: (value) {
-            if (value.trim().isEmpty) return;
-            _update(settings.copyWith(baseUrl: value.trim()));
-          },
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '改完立即生效，保存在数据目录的 settings.json；换交互模型会影响问答速度，'
-          '换生成模型会影响摘要/日报/灵魂档案。向量模型变了会自动重建索引。',
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const Divider(height: 24),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: settings.cloudEnabled,
-          onChanged: (value) => _toggleCloud(value),
+          onChanged: _toggleCloud,
           title: const Text('使用云端模型（隐私开关）'),
           subtitle: Text(
             settings.cloudEnabled
-                ? '问答/摘要/日报/soul 会发送到 ${settings.cloudBaseUrl}'
+                ? '问答 / 摘要 / 日报 / soul 会发送到云端'
                 : '默认全本地；开启后内容会离开本机',
             style: theme.textTheme.labelSmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
@@ -1158,75 +973,43 @@ class _RagModelsCardState extends State<_RagModelsCard> {
           ),
         ),
         if (settings.cloudEnabled) ...<Widget>[
-          const SizedBox(height: 4),
-          TextFormField(
-            controller: _cloudBase,
-            decoration: const InputDecoration(
-              labelText: '云端地址（OpenAI 兼容）',
-              isDense: true,
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextFormField(
-            controller: _cloudModel,
-            decoration: const InputDecoration(
-              labelText: '云端模型（如 gpt-4o-mini）',
-              isDense: true,
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextFormField(
-            controller: _cloudKey,
-            obscureText: true,
-            decoration: InputDecoration(
-              labelText: settings.hasCloudKey
-                  ? 'API Key（已保存，留空则不修改）'
-                  : 'API Key',
-              isDense: true,
-              border: const OutlineInputBorder(),
-              helperText: SecretStore.isSecure
-                  ? '用 Windows DPAPI 加密保存，只有当前用户能解开'
-                  : '当前平台没有系统密钥环，暂用 Base64（不安全）',
+          Text(
+            profile == null
+                ? '还没有云端配置：请在上方「模型」里添加一套云端配置并填 API Key。'
+                : '当前云端配置：${profile.name} · ${profile.model}',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: profile == null
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: <Widget>[
-              FilledButton.tonal(
-                onPressed: _saveCloudFields,
-                child: const Text('保存'),
-              ),
-              TextButton(
-                onPressed: settings.hasCloudKey ? _clearCloudKey : null,
-                child: const Text('清除 Key'),
-              ),
-              TextButton(
-                onPressed: _testCloud,
+              OutlinedButton(
+                onPressed: _test,
                 child: const Text('测试连接'),
               ),
+              if (_status != null)
+                Text(
+                  _status!,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
             ],
           ),
-          if (_cloudStatus != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                _cloudStatus!,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-            ),
         ],
-        if (_saved)
-          Text(
-            '已保存',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.primary,
-            ),
+        const SizedBox(height: 6),
+        Text(
+          '模型地址、模型名、API Key 统一在上方「模型」里管理；这里只控制是否允许出网。'
+          '向量索引始终在本地。',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
           ),
+        ),
       ],
     );
   }
