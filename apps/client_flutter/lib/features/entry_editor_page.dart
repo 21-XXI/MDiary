@@ -7,6 +7,7 @@ import '../data/models.dart';
 import '../state/app_state.dart';
 import '../ui/markdown_view.dart';
 import '../ui/emoji_picker.dart';
+import '../ui/markdown_editor.dart';
 import '../ui/symbol_palette.dart';
 
 enum EditorMode { edit, split, preview }
@@ -28,10 +29,12 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
   late final TextEditingController _titleController = TextEditingController(
     text: widget.entry.title,
   );
-  late final TextEditingController _bodyController = TextEditingController(
+  late final MarkdownEditingController _bodyController = MarkdownEditingController(
     text: widget.entry.bodyMd,
   );
   final FocusNode _bodyFocus = FocusNode();
+  final ScrollController _bodyScroll = ScrollController();
+  final ScrollController _gutterScroll = ScrollController();
 
   EditorMode _mode = EditorMode.edit;
   List<Attachment> _attachments = const <Attachment>[];
@@ -43,6 +46,11 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
   void initState() {
     super.initState();
     _reloadAttachments();
+    _bodyScroll.addListener(() {
+      if (_gutterScroll.hasClients && _bodyScroll.hasClients) {
+        _gutterScroll.jumpTo(_bodyScroll.offset);
+      }
+    });
   }
 
   @override
@@ -334,8 +342,9 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
                   onSelectionChanged: (selection) =>
                       setState(() => _mode = selection.first),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+                Wrap(
+                  spacing: 0,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: <Widget>[
                     IconButton(
                       tooltip: '表情',
@@ -351,6 +360,41 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
                         );
                       },
                       icon: const Icon(Icons.emoji_emotions_outlined),
+                    ),
+                    PopupMenuButton<String>(
+                      tooltip: '编辑工具',
+                      icon: const Icon(Icons.more_horiz),
+                      onSelected: (value) {
+                        if (value == 'find') {
+                          showFindReplaceDialog(
+                            context,
+                            _bodyController,
+                            () => _onBodyChanged(_bodyController.text),
+                          );
+                        } else if (value == 'outline') {
+                          showOutlineDialog(context, _bodyController, _bodyFocus);
+                        } else if (value == 'commands') {
+                          showCommandPalette(
+                            context,
+                            _bodyController,
+                            onChanged: () => _onBodyChanged(_bodyController.text),
+                          );
+                        }
+                      },
+                      itemBuilder: (menuContext) => const <PopupMenuEntry<String>>[
+                        PopupMenuItem<String>(
+                          value: 'find',
+                          child: Text('查找替换（Ctrl+F）'),
+                        ),
+                        PopupMenuItem<String>(
+                          value: 'outline',
+                          child: Text('大纲'),
+                        ),
+                        PopupMenuItem<String>(
+                          value: 'commands',
+                          child: Text('命令面板（Ctrl+P）'),
+                        ),
+                      ],
                     ),
                     IconButton(
                       tooltip: '符号与公式',
@@ -435,39 +479,110 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
 
   Widget _buildEditor(BuildContext context) {
     final theme = Theme.of(context);
+    final style = AppTheme.editorStyle(
+      _state.editorFontSize,
+      theme.colorScheme.onSurface,
+      fontFamily: _state.editorFont,
+    );
+    final lines = '\n'.allMatches(_bodyController.text).length + 1;
+    final offset = _bodyController.selection.baseOffset.clamp(
+      0,
+      _bodyController.text.length,
+    );
+    final currentLine = '\n'.allMatches(_bodyController.text.substring(0, offset)).length;
+    final numbers = <TextSpan>[];
+    for (var i = 0; i < lines; i++) {
+      numbers.add(
+        TextSpan(
+          text: '${i + 1}',
+          style: style.copyWith(
+            color: i == currentLine
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
+            fontWeight: i == currentLine ? FontWeight.w700 : FontWeight.w400,
+          ),
+        ),
+      );
+      if (i != lines - 1) numbers.add(TextSpan(text: '\n', style: style));
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-      // Ctrl+Shift+V 粘贴截图：用 Ctrl+Shift 组合，不抢 TextField 自带的 Ctrl+V 文本粘贴。
       child: Focus(
         onKeyEvent: (node, event) {
-          if (event is KeyDownEvent &&
-              HardwareKeyboard.instance.isControlPressed &&
-              HardwareKeyboard.instance.isShiftPressed &&
-              event.logicalKey == LogicalKeyboardKey.keyV) {
+          if (event is! KeyDownEvent) return KeyEventResult.ignored;
+          final control = HardwareKeyboard.instance.isControlPressed;
+          final shift = HardwareKeyboard.instance.isShiftPressed;
+          if (control && shift && event.logicalKey == LogicalKeyboardKey.keyV) {
             _pasteScreenshot();
             return KeyEventResult.handled;
           }
+          if (control && event.logicalKey == LogicalKeyboardKey.keyF) {
+            showFindReplaceDialog(
+              context,
+              _bodyController,
+              () => _onBodyChanged(_bodyController.text),
+            );
+            return KeyEventResult.handled;
+          }
+          if (control && event.logicalKey == LogicalKeyboardKey.keyP) {
+            showCommandPalette(
+              context,
+              _bodyController,
+              onChanged: () => _onBodyChanged(_bodyController.text),
+            );
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.tab) {
+            indentSelection(_bodyController, outdent: shift);
+            _onBodyChanged(_bodyController.text);
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.enter &&
+              !shift &&
+              !control) {
+            final next = continueListOnEnter(_bodyController.value);
+            if (next != null) {
+              _bodyController.value = next;
+              _onBodyChanged(_bodyController.text);
+              return KeyEventResult.handled;
+            }
+          }
           return KeyEventResult.ignored;
         },
-        child: TextField(
-          key: const Key('editor-body'),
-          controller: _bodyController,
-          focusNode: _bodyFocus,
-          onChanged: _onBodyChanged,
-          maxLines: null,
-          expands: true,
-          textAlignVertical: TextAlignVertical.top,
-          keyboardType: TextInputType.multiline,
-          style: AppTheme.editorStyle(
-            _state.editorFontSize,
-            theme.colorScheme.onSurface,
-            fontFamily: _state.editorFont,
-          ),
-          decoration: const InputDecoration(
-            border: InputBorder.none,
-            isDense: true,
-            hintText: '写点什么…支持 Markdown，输入后自动保存',
-          ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            SizedBox(
+              width: 36,
+              child: SingleChildScrollView(
+                controller: _gutterScroll,
+                physics: const NeverScrollableScrollPhysics(),
+                child: Text.rich(TextSpan(children: numbers), textAlign: TextAlign.right),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                key: const Key('editor-body'),
+                controller: _bodyController,
+                focusNode: _bodyFocus,
+                scrollController: _bodyScroll,
+                onChanged: _onBodyChanged,
+                maxLines: null,
+                expands: true,
+                textAlignVertical: TextAlignVertical.top,
+                keyboardType: TextInputType.multiline,
+                inputFormatters: <TextInputFormatter>[AutoPairFormatter()],
+                style: style,
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                  hintText: '写点什么…支持 Markdown，输入后自动保存',
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
