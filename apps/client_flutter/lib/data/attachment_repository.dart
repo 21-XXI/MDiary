@@ -115,6 +115,19 @@ class AttachmentRepository {
   }
 
   /// 读回附件字节；库里没有返回 null。
+  /// 替换附件内容（编辑 md 附件时用）。
+  void updateContent({
+    required String id,
+    required String sha256,
+    required int sizeBytes,
+    required String mime,
+  }) {
+    _raw.execute(
+      'UPDATE attachments SET sha256 = ?, size_bytes = ?, mime = ? WHERE id = ?',
+      <Object?>[sha256, sizeBytes, mime, id],
+    );
+  }
+
   Uint8List? readBlob(String sha256) {
     final rows = _raw.select(
       'SELECT bytes FROM attachment_blobs WHERE sha256 = ?',

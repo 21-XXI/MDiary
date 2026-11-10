@@ -196,7 +196,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             runSpacing: 6,
             children: <Widget>[
               FilledButton.icon(
-                onPressed: () => state.createEntry(),
+                onPressed: () => _newEntry(state),
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('新建日记'),
                 style: FilledButton.styleFrom(
@@ -401,7 +401,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         description: state.query.isEmpty ? '按 Ctrl+N 开始写第一篇' : '换个关键词试试',
         action: state.query.isEmpty
             ? FilledButton.icon(
-                onPressed: () => state.createEntry(),
+                onPressed: () => _newEntry(state),
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('新建日记'),
               )
@@ -514,6 +514,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   /// 星图里点日记星 -> 带着那篇回来并选中，直接进入编辑。
+  Future<void> _newEntry(AppState state) async {
+    final today = DateTime.now();
+    for (final entry in state.entryRepo.query()) {
+      if (entry.isDeleted) continue;
+      if (entry.entryDate.year == today.year &&
+          entry.entryDate.month == today.month &&
+          entry.entryDate.day == today.day) {
+        await state.select(entry);
+        return;
+      }
+    }
+    await state.createEntry();
+  }
+
   Future<void> _openStarMap() async {
     final entry = await Navigator.of(context).push<Entry>(
       MaterialPageRoute<Entry>(builder: (context) => const StarMapPage()),

@@ -195,6 +195,61 @@ class AppState extends ChangeNotifier {
 
   String? get modelsPath => _modelRegistryStore.path;
 
+  /// 读取 md 附件正文。
+  String? attachmentText(Attachment attachment) {
+    final bytes = attachmentRepo.readBlob(attachment.sha256);
+    if (bytes == null) return null;
+    return utf8.decode(bytes, allowMalformed: true);
+  }
+
+  /// 新建或更新一个「附加 md 笔记」，并同步主文件里的链接。
+  Future<Attachment> saveMarkdownNote(
+    Entry entry, {
+    required String filename,
+    required String text,
+    Attachment? existing,
+  }) async {
+    final bytes = Uint8List.fromList(utf8.encode(text));
+    final blob = await store.storeBytes(bytes, filename);
+    const mime = 'text/markdown';
+    final current = entryRepo.findById(entry.id) ?? entry;
+    Attachment attachment;
+    String body;
+    if (existing != null) {
+      attachmentRepo.updateContent(
+        id: existing.id,
+        sha256: blob.sha256,
+        sizeBytes: blob.sizeBytes,
+        mime: mime,
+      );
+      attachment = Attachment(
+        id: existing.id,
+        entryId: existing.entryId,
+        sha256: blob.sha256,
+        filename: filename,
+        mime: mime,
+        sizeBytes: blob.sizeBytes,
+        createdAt: existing.createdAt,
+      );
+      body = current.bodyMd.replaceAll(
+        'assets/${existing.sha256}',
+        'assets/${blob.sha256}',
+      );
+    } else {
+      attachment = attachmentRepo.insert(
+        entryId: entry.id,
+        sha256: blob.sha256,
+        filename: filename,
+        mime: mime,
+        sizeBytes: blob.sizeBytes,
+      );
+      body = '${entry.bodyMd.trimRight()}\n- [$filename](assets/${blob.sha256}.md)\n';
+    }
+    entryRepo.saveContent(entry.id, body: body);
+    await refresh();
+    return attachment;
+  }
+
   AgentConfig get agentConfig => _agentConfig;
 
   String get agentRunsPath => AgentRunLog.pathFor(libraryPath);

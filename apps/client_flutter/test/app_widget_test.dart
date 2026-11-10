@@ -230,7 +230,12 @@ void main() {
     await tester.pumpAndSettle();
     final firstId = state.selected!.id;
 
-    await createEntry(tester);
+    // 新建按钮现在遵循「一天一个主文件」：这里直接调 API 造第二篇空草稿
+    await tester.runAsync(() async {
+      await state.createEntry();
+      await state.refresh();
+    });
+    await tester.pumpAndSettle();
     expect(state.entryRepo.count(), 2);
 
     // 新建的空草稿没有输入，切回第一篇后应被物理删除
